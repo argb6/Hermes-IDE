@@ -346,13 +346,12 @@ from typing import Optional
 
 
 from hermes_cli.subcommands.cron import build_cron_parser
+from hermes_cli.subcommands._shared import add_removed_command
 from hermes_cli.subcommands.gateway import build_gateway_parser
 from hermes_cli.subcommands.profile import build_profile_parser
 from hermes_cli.subcommands.model import build_model_parser
 from hermes_cli.subcommands.setup import build_setup_parser
 
-from hermes_cli.subcommands.whatsapp import build_whatsapp_parser, build_whatsapp_cloud_parser
-from hermes_cli.subcommands.slack import build_slack_parser
 from hermes_cli.subcommands.login import build_login_parser
 from hermes_cli.subcommands.logout import build_logout_parser
 from hermes_cli.subcommands.auth import build_auth_parser
@@ -385,18 +384,14 @@ from hermes_cli.subcommands.insights import build_insights_parser
 from hermes_cli.subcommands.usage import build_usage_parser
 from hermes_cli.subcommands.monitoring import build_monitoring_parser
 from hermes_cli.subcommands.skills import build_skills_parser
-from hermes_cli.subcommands.pairing import build_pairing_parser
 from hermes_cli.subcommands.plugins import build_plugins_parser
 from hermes_cli.subcommands.mcp import build_mcp_parser
 from hermes_cli.subcommands.claw import build_claw_parser
 from hermes_cli.subcommands.vault import build_vault_parser
-from hermes_cli.subcommands.moa import build_moa_parser
 from hermes_cli.subcommands.fallback import build_fallback_parser
 from hermes_cli.subcommands.worktree import build_worktree_parser
 from hermes_cli.subcommands.browser import build_browser_parser
 from hermes_cli.subcommands.secrets import build_secrets_parser
-from hermes_cli.subcommands.codex_runtime import build_codex_runtime_parser
-from hermes_cli.subcommands.egress import build_egress_parser
 from hermes_cli.subcommands.migrate import build_migrate_parser
 from hermes_cli.subcommands.checkpoints import build_checkpoints_parser
 from hermes_cli.subcommands.bundles import build_bundles_parser
@@ -2865,18 +2860,9 @@ def _resolve_deferred_platform_cli_command(command_name: str | None) -> None:
     not import it, so the CLI registration never happens and ``hermes photon`` fails with argparse ``invalid
     choice`` (issue #54678).
     """
-    if not command_name:
-        return
-    try:
-        from gateway.platform_registry import platform_registry
-
-        platform_registry.get(command_name)
-    except Exception as exc:
-        logging.getLogger(__name__).debug(
-            "Deferred platform CLI resolution failed for %s: %s",
-            command_name,
-            exc,
-        )
+    # Messaging platform CLIs (``hermes photon`` ...) are retired in this fork
+    # along with the gateway; the platform registry is never materialized.
+    return
 
 
 _AGENT_COMMANDS = {None, "chat", "acp", "rl"}
@@ -3372,15 +3358,14 @@ def _build_cli_parser():
     chat_parser.set_defaults(func=cmd_chat)
 
     build_model_parser(subparsers, cmd_model=cmd_model)
-    build_moa_parser(subparsers)
+    add_removed_command(subparsers, "moa", "Mixture-of-Agents configuration")
     build_fallback_parser(subparsers)
     build_worktree_parser(subparsers)
     build_browser_parser(subparsers)
     build_secrets_parser(subparsers)
-    # OUTBOUND egress firewall; ``hermes proxy`` (gateway group) is the INBOUND one.
-    build_egress_parser(subparsers)
+    add_removed_command(subparsers, "egress", "Egress firewall")
     build_migrate_parser(subparsers)
-    build_codex_runtime_parser(subparsers)
+    add_removed_command(subparsers, "codex-runtime", "Codex runtime migration")
     build_gateway_parser(
         subparsers, cmd_gateway=cmd_gateway, cmd_proxy=cmd_proxy, cmd_gateway_enroll=cmd_gateway_enroll
     )
@@ -3393,12 +3378,10 @@ def _build_cli_parser():
         logger.debug("LSP CLI registration failed: %s", _lsp_err)
 
     build_setup_parser(subparsers, cmd_setup=cmd_setup)
-    build_whatsapp_parser(subparsers, cmd_whatsapp=cmd_whatsapp)
-    build_whatsapp_cloud_parser(subparsers, cmd_whatsapp_cloud=cmd_whatsapp_cloud)
-    build_slack_parser(subparsers, cmd_slack=cmd_slack)
-
-    from hermes_cli.send_cmd import register_send_subparser
-    register_send_subparser(subparsers)
+    add_removed_command(subparsers, "whatsapp", "WhatsApp integration")
+    add_removed_command(subparsers, "whatsapp-cloud", "WhatsApp Business Cloud API integration")
+    add_removed_command(subparsers, "slack", "Slack integration")
+    add_removed_command(subparsers, "send", "Send-to-platform messaging")
 
     build_login_parser(subparsers, cmd_login=cmd_login)
     build_logout_parser(subparsers, cmd_logout=cmd_logout)
@@ -3408,11 +3391,8 @@ def _build_cli_parser():
     build_cron_parser(subparsers, cmd_cron=cmd_cron)
     build_webhook_parser(subparsers, cmd_webhook=cmd_webhook)
 
-    from hermes_cli.subcommands.peer import build_peer_parser
-    build_peer_parser(subparsers)
-
-    from hermes_cli.portal_cli import add_parser as _add_portal_parser
-    _add_portal_parser(subparsers)
+    add_removed_command(subparsers, "peer", "Bot-to-bot peer messaging")
+    add_removed_command(subparsers, "portal", "Nous Portal account management")
 
     from hermes_cli.kanban import build_parser as _build_kanban_parser
     _build_kanban_parser(subparsers).set_defaults(func=cmd_kanban)
@@ -3434,7 +3414,7 @@ def _build_cli_parser():
     build_config_parser(subparsers, cmd_config=cmd_config)
     build_skin_parser(subparsers, cmd_skin=cmd_skin)
     build_console_parser(subparsers, cmd_console=cmd_console)
-    build_pairing_parser(subparsers, cmd_pairing=cmd_pairing)
+    add_removed_command(subparsers, "pairing", "DM pairing codes (messaging)")
     build_skills_parser(subparsers, cmd_skills=cmd_skills)
     build_bundles_parser(subparsers)
     build_plugins_parser(subparsers, cmd_plugins=cmd_plugins)
