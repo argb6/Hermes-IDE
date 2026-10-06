@@ -143,8 +143,9 @@ def _external_process_cli_command(provider_id: str, default: str) -> str:
 # ``flow``: ``device_code`` = show code + URL + poll; ``external`` = delegated to a terminal/CLI.
 _OAUTH_PROVIDER_CATALOG: tuple[Dict[str, Any], ...] = (
     # status_fn None → dispatched via auth.get_<provider>_auth_status.
-    {"id": "nous", "name": "Nous Portal", "flow": "device_code", "cli_command": "hermes auth add nous",
-     "docs_url": "https://portal.nousresearch.com", "status_fn": None},
+    # Nous Portal entry removed in this fork (localized, user-owned install):
+    # without it the provider card, the OAuth start flow, and the CLI hint all
+    # disappear from the onboarding picker and Settings -> Providers.
     {"id": "openai-codex", "name": "ChatGPT or Codex Subscription", "flow": "device_code",
      "cli_command": "hermes auth add openai-codex", "docs_url": "https://platform.openai.com/docs",
      "status_fn": None},
