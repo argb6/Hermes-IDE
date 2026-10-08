@@ -1,0 +1,5 @@
+VS Code Material Icon Theme
+npm: material-icon-theme@5.38.1
+https://github.com/material-extensions/vscode-material-icon-theme
+License: MIT (see LICENSE)
+Synced offline into Hermes Desktop; runtime does not fetch icons from the network.

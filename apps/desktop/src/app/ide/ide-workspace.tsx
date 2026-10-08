@@ -1,0 +1,858 @@
+import { useStore } from '@nanostores/react'
+import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from 'react'
+
+import { PreviewPane } from '@/app/chat/right-rail/preview-pane'
+import { WiredPane } from '@/app/contrib/context'
+import { ReviewPane } from '@/app/right-sidebar/review'
+import { $terminalInjection } from '@/app/right-sidebar/store'
+import { createTerminal, ensureTerminal } from '@/app/right-sidebar/terminal/terminals'
+import { Button } from '@/components/ui/button'
+import { Codicon } from '@/components/ui/codicon'
+import { useI18n } from '@/i18n'
+import { writeDesktopFileText } from '@/lib/desktop-fs'
+import { normalizeOrLocalPreviewTarget } from '@/lib/local-preview'
+import { cn } from '@/lib/utils'
+import { $repoStatusByCwd, registerRepoStatusCwd } from '@/store/coding-status'
+import { notifyError } from '@/store/notifications'
+import { type PreviewTarget } from '@/store/preview'
+import { openFolderAsProject, pickProjectFolder } from '@/store/projects'
+import { $reviewOpen, revealReview } from '@/store/review'
+import { $focusedWorkspaceCwd } from '@/store/session-states'
+import { $workspaceChangeTick } from '@/store/workspace-events'
+
+import { IdeActivityBar, type IdePanel } from './ide-activity'
+import { IdeChatHeader } from './ide-chats'
+import { $ideCommand } from './ide-commands'
+import { IdeConflict } from './ide-conflict'
+import { $ideSaveRequest, noteIdeEditor } from './ide-editor'
+import { IdeExplorer } from './ide-explorer'
+import { IdeGit } from './ide-git'
+import { GITHUB_LOGIN_COMMAND, IdeGithub } from './ide-github'
+import { $ideOpenPath, $ideReveal, $ideSideTick, noteIdeFile, noteIdeTimeline, setIdeTitle, takeIdeHistoryMove } from './ide-nav'
+import { IdePanel as IdeBottomPanel, type IdeBottomTab } from './ide-panel'
+import { IdeSearch } from './ide-search'
+import {
+  $ideRecentFolders,
+  noteIdeRecentFolder,
+  readIdeLayout,
+  readIdeTabs,
+  writeIdeLayout,
+  writeIdeTabs
+} from './ide-session'
+import { $ideShell } from './ide-shells'
+import { IdeStatusBar } from './ide-status'
+
+interface OpenTab {
+  dirty?: boolean
+  id: string
+  target: PreviewTarget
+}
+
+const GITHUB_CLONE_RE = /^(?:https:\/\/github\.com\/[\w.-]+\/[\w.-]+(?:\.git)?\/?|git@github\.com:[\w.-]+\/[\w.-]+(?:\.git)?)$/i
+
+const PANEL_TITLE: Record<IdePanel, 'explorer' | 'git' | 'github' | 'search'> = {
+  files: 'explorer',
+  git: 'git',
+  github: 'github',
+  search: 'search'
+}
+
+const SIZE_KEY = 'hermes.desktop.ide.sizes'
+
+function readSize(key: 'chat' | 'side' | 'split' | 'terminal', fallback: number, min: number, max: number) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SIZE_KEY) || '{}') as Record<string, number>
+    const value = raw[key]
+
+    if (typeof value === 'number' && value >= min && value <= max) {
+      return value
+    }
+  } catch {
+    // A bad saved size falls back to the default.
+  }
+
+  return fallback
+}
+
+function writeSize(key: 'chat' | 'side' | 'split' | 'terminal', value: number) {
+  const current = (() => {
+    try {
+      return JSON.parse(localStorage.getItem(SIZE_KEY) || '{}') as Record<string, number>
+    } catch {
+      return {}
+    }
+  })()
+
+  localStorage.setItem(SIZE_KEY, JSON.stringify({ ...current, [key]: value }))
+}
+
+/** VS Code arrangement: activity bar, side bar, editor tabs, chat on the right. */
+export function IdeWorkspace() {
+  const cwd = useStore($focusedWorkspaceCwd)
+  const recentFolders = useStore($ideRecentFolders)
+  const byCwd = useStore($repoStatusByCwd)
+  const saved = useRef(readIdeLayout())
+  const [panel, setPanel] = useState<IdePanel>(() => (saved.current.panel as IdePanel) || 'files')
+  const [sideOpen, setSideOpen] = useState(() => saved.current.sideOpen)
+  const [chatOpen, setChatOpen] = useState(() => saved.current.chatOpen)
+  const [rightTab, setRightTab] = useState<'changes' | 'chat'>(() => saved.current.rightTab)
+  const reviewOpen = useStore($reviewOpen)
+  const reviewWasOpen = useRef(false)
+  const [terminalOpen, setTerminalOpen] = useState(() => saved.current.terminalOpen)
+  const [bottomTab, setBottomTab] = useState<IdeBottomTab>(() => (saved.current.bottomTab as IdeBottomTab) || 'terminal')
+  const [sideWidth, setSideWidth] = useState(() => readSize('side', 256, 160, 520))
+  const [chatWidth, setChatWidth] = useState(() => readSize('chat', 360, 280, 640))
+  const [terminalHeight, setTerminalHeight] = useState(() => readSize('terminal', 192, 96, 520))
+  const [diff, setDiff] = useState<null | string>(null)
+  const [tabs, setTabs] = useState<OpenTab[]>([])
+  const [activeId, setActiveId] = useState<null | string>(null)
+  const [split, setSplit] = useState(false)
+  const [splitRatio, setSplitRatio] = useState(() => readSize('split', 0.5, 0.25, 0.75))
+  const [secondaryTabs, setSecondaryTabs] = useState<OpenTab[]>([])
+  const [secondaryId, setSecondaryId] = useState<null | string>(null)
+  const splitHostRef = useRef<HTMLDivElement | null>(null)
+  const tabsRef = useRef(tabs)
+  tabsRef.current = tabs
+  const restoredTabs = useRef(false)
+  const { t } = useI18n()
+  const active = tabs.find(tab => tab.id === activeId) ?? null
+  const secondary = secondaryTabs.find(tab => tab.id === secondaryId) ?? null
+
+  const folder =
+    cwd
+      ?.split(/[\\/]+/)
+      .filter(Boolean)
+      .pop() ?? ''
+
+  const conflicted = Boolean(
+    active?.target.path &&
+      (byCwd[cwd || '']?.files ?? []).some(file => file.conflicted && absEndsWith(cwd, file.path, active.target.path || ''))
+  )
+
+  useEffect(() => registerRepoStatusCwd(cwd), [cwd])
+
+  useEffect(() => {
+    if (cwd) {
+      noteIdeRecentFolder(cwd)
+    }
+  }, [cwd])
+
+  useEffect(() => {
+    writeIdeLayout({
+      bottomTab,
+      chatOpen,
+      panel,
+      rightTab,
+      sideOpen,
+      terminalOpen
+    })
+  }, [bottomTab, chatOpen, panel, rightTab, sideOpen, terminalOpen])
+
+  useEffect(() => {
+    writeIdeTabs(tabs.map(tab => tab.target.path).filter((path): path is string => Boolean(path)))
+  }, [tabs])
+
+  useEffect(() => {
+    setIdeTitle(folder)
+  }, [folder])
+
+  useEffect(() => {
+    return $workspaceChangeTick.subscribe(() => {
+      setTabs(current =>
+        current.map(tab => (tab.target.path ? { ...tab, dirty: true } : tab))
+      )
+      setSecondaryTabs(current =>
+        current.map(tab => (tab.target.path ? { ...tab, dirty: true } : tab))
+      )
+      setChatOpen(true)
+      setRightTab('changes')
+      revealReview(cwd)
+    })
+  }, [cwd])
+
+  useEffect(() => {
+    let seen = $ideSaveRequest.get()
+
+    return $ideSaveRequest.subscribe(tick => {
+      if (tick === seen) {
+        return
+      }
+
+      seen = tick
+      const path = active?.target.path
+
+      if (!path) {
+        return
+      }
+
+      setTabs(current => current.map(tab => (tab.target.path === path ? { ...tab, dirty: false } : tab)))
+      setSecondaryTabs(current => current.map(tab => (tab.target.path === path ? { ...tab, dirty: false } : tab)))
+    })
+  }, [active?.target.path])
+
+  useEffect(() => {
+    if (!active) {
+      noteIdeEditor(null)
+    }
+  }, [active])
+
+  useEffect(() => {
+    if (!activeId || takeIdeHistoryMove()) {
+      return
+    }
+
+    noteIdeFile(activeId)
+  }, [activeId])
+
+  useEffect(() => {
+    return $ideSideTick.listen(tick => {
+      if (tick > 0) {
+        setSideOpen(open => !open)
+      }
+    })
+  }, [])
+
+  useEffect(() => {
+    return $ideReveal.listen(reveal => {
+      if (!reveal) {
+        return
+      }
+
+      setDiff(null)
+      setActiveId(reveal.id)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (reviewOpen) {
+      reviewWasOpen.current = true
+      setChatOpen(true)
+      setRightTab('changes')
+
+      return
+    }
+
+    if (reviewWasOpen.current) {
+      reviewWasOpen.current = false
+      setRightTab('chat')
+    }
+  }, [reviewOpen])
+
+  const showPanel = (next: IdePanel) => {
+    setPanel(next)
+    setSideOpen(true)
+
+    if (next !== 'git') {
+      setDiff(null)
+    }
+  }
+
+  const showFile = async (path: string, options?: { quiet?: boolean; secondary?: boolean }) => {
+    try {
+      const preview = await normalizeOrLocalPreviewTarget(path, cwd || undefined)
+
+      if (!preview) {
+        throw new Error(path)
+      }
+
+      const id = preview.path || preview.url
+
+      setDiff(null)
+
+      if (options?.secondary) {
+        setSecondaryTabs(current => (current.some(tab => tab.id === id) ? current : [...current, { id, target: preview }]))
+        setSecondaryId(id)
+        setSplit(true)
+      } else {
+        setTabs(current => (current.some(tab => tab.id === id) ? current : [...current, { id, target: preview }]))
+        setActiveId(id)
+      }
+
+      if (preview.path) {
+        noteIdeTimeline(preview.path)
+      }
+    } catch (error) {
+      if (!options?.quiet) {
+        notifyError(error, t.rightSidebar.previewUnavailable)
+      }
+    }
+  }
+
+  const showFileRef = useRef(showFile)
+  showFileRef.current = showFile
+
+  useEffect(() => {
+    if (restoredTabs.current) {
+      return
+    }
+
+    restoredTabs.current = true
+    const savedTabs = readIdeTabs()
+
+    if (savedTabs.length === 0) {
+      return
+    }
+
+    void (async () => {
+      for (const row of savedTabs) {
+        await showFileRef.current(row.path, { quiet: true })
+      }
+    })()
+  }, [])
+
+  useEffect(() => {
+    return $ideOpenPath.listen(request => {
+      if (request) {
+        void showFileRef.current(request.path)
+      }
+    })
+  }, [])
+
+  const cloneRepo = async () => {
+    const url = window.prompt(t.ide.clonePrompt)?.trim()
+
+    if (!url) {
+      return
+    }
+
+    if (!GITHUB_CLONE_RE.test(url.replace(/\/$/, ''))) {
+      notifyError(new Error(t.ide.cloneInvalid), t.ide.cloneInvalid)
+
+      return
+    }
+
+    const parent = await pickProjectFolder()
+
+    if (!parent) {
+      return
+    }
+
+    const name = url
+      .replace(/\.git$/i, '')
+      .split(/[/:]/)
+      .filter(Boolean)
+      .pop()
+    const dest = `${parent.replace(/[/\\]+$/, '')}\\${name}`
+
+    setTerminalOpen(true)
+    ensureTerminal()
+    $terminalInjection.set(`git clone -- ${JSON.stringify(url)} ${JSON.stringify(dest)}; if ($LASTEXITCODE -eq 0) { Set-Location -LiteralPath ${JSON.stringify(dest)} }`)
+  }
+
+  const splitActiveRight = () => {
+    if (!active) {
+      return
+    }
+
+    setSplit(true)
+    setSecondaryTabs(current => (current.some(tab => tab.id === active.id) ? current : [...current, active]))
+    setSecondaryId(active.id)
+  }
+
+  const openGithubDoc = async (title: string, markdown: string) => {
+    const root = (cwd || (await pickProjectFolder()) || '').replace(/[/\\]+$/, '')
+
+    if (!root) {
+      return
+    }
+
+    const safe = title.replace(/[^\w.#-]+/g, '_').slice(0, 80)
+    const path = `${root}\\.hermes-ide\\${safe}.md`
+
+    try {
+      await writeDesktopFileText(path, markdown)
+      await showFile(path)
+    } catch (error) {
+      notifyError(error, t.rightSidebar.previewUnavailable)
+    }
+  }
+
+  const closeTab = (id: string) => {
+    setTabs(current => {
+      const index = current.findIndex(tab => tab.id === id)
+      const next = current.filter(tab => tab.id !== id)
+
+      if (activeId === id) {
+        const fallback = next[Math.min(index, next.length - 1)] ?? null
+
+        setActiveId(fallback?.id ?? null)
+      }
+
+      return next
+    })
+  }
+
+  useEffect(() => {
+    return $ideCommand.listen(command => {
+      if (!command) {
+        return
+      }
+
+      switch (command.name) {
+        case 'file.openFolder':
+          void openFolderAsProject()
+          break
+        case 'file.closeTab':
+          if (activeId) {
+            closeTab(activeId)
+          }
+          break
+        case 'selection.all':
+          document.execCommand('selectAll')
+          break
+        case 'view.files':
+          showPanel('files')
+          break
+        case 'view.search':
+        case 'go.search':
+          showPanel('search')
+          break
+        case 'view.git':
+        case 'go.git':
+          showPanel('git')
+          break
+        case 'view.github':
+          showPanel('github')
+          break
+        case 'view.chat':
+          setChatOpen(open => !open)
+          break
+        case 'view.terminal':
+        case 'terminal.toggle':
+          setTerminalOpen(open => !open)
+          break
+        case 'view.terminalShow':
+          setTerminalOpen(true)
+          setBottomTab('terminal')
+          break
+        case 'view.problems':
+          setTerminalOpen(true)
+          setBottomTab('problems')
+          break
+        case 'view.output':
+          setTerminalOpen(true)
+          setBottomTab('output')
+          break
+        case 'view.debug':
+          setTerminalOpen(true)
+          setBottomTab('debug')
+          break
+        case 'run.terminal':
+          setTerminalOpen(true)
+          break
+        case 'terminal.new':
+          setTerminalOpen(true)
+          createTerminal($focusedWorkspaceCwd.get() || undefined, $ideShell.get())
+          break
+        default:
+          break
+      }
+    })
+  }, [activeId])
+
+  return (
+    <div className="flex h-full min-h-0 min-w-0 flex-col bg-background">
+      <div className="flex min-h-0 flex-1">
+        <IdeActivityBar
+          onPanel={next => {
+            if (next === panel && sideOpen) {
+              setSideOpen(false)
+
+              return
+            }
+
+            showPanel(next)
+          }}
+          panel={panel}
+          sideOpen={sideOpen}
+        />
+        {sideOpen && (
+          <>
+            <div
+              className="flex h-full shrink-0 flex-col border-r border-(--ui-stroke-secondary) bg-(--ui-sidebar-surface-background)"
+              style={{ width: sideWidth }}
+            >
+              <div className="flex h-9 shrink-0 items-center px-3 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                {t.ide[PANEL_TITLE[panel]]}
+              </div>
+              <div className="min-h-0 flex-1">
+              {panel === 'files' && (
+                <IdeExplorer
+                  activePath={active?.target.path ?? null}
+                  cwd={cwd}
+                  onDiff={setDiff}
+                  onOpen={path => void showFile(path)}
+                />
+              )}
+                {panel === 'search' && <IdeSearch cwd={cwd} onOpen={path => void showFile(path)} />}
+                {panel === 'git' && <IdeGit cwd={cwd} onDiff={setDiff} />}
+                {panel === 'github' && (
+                <IdeGithub
+                  cwd={cwd}
+                  onClone={() => void cloneRepo()}
+                  onComment={(number, body) => {
+                    setTerminalOpen(true)
+                    ensureTerminal()
+                    $terminalInjection.set(`gh pr comment ${number} --body ${JSON.stringify(body)}`)
+                  }}
+                  onLogin={() => {
+                    setTerminalOpen(true)
+                    ensureTerminal()
+                    $terminalInjection.set(GITHUB_LOGIN_COMMAND)
+                  }}
+                  onOpen={path => void showFile(path)}
+                  onOpenDoc={(title, markdown) => void openGithubDoc(title, markdown)}
+                  onPull={() => {
+                    if (!cwd) {
+                      return
+                    }
+
+                    setTerminalOpen(true)
+                    ensureTerminal()
+                    $terminalInjection.set('git pull --ff-only')
+                  }}
+                  onPush={() => {
+                    if (!cwd) {
+                      return
+                    }
+
+                    setTerminalOpen(true)
+                    ensureTerminal()
+                    $terminalInjection.set('git push')
+                  }}
+                />
+              )}
+              </div>
+            </div>
+            <PaneSash
+              axis="x"
+              onResize={delta =>
+                setSideWidth(current => {
+                  const next = clamp(current + delta, 160, 520)
+
+                  writeSize('side', next)
+
+                  return next
+                })
+              }
+            />
+          </>
+        )}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className={cn('flex min-h-0 flex-1', split && 'gap-0')} ref={splitHostRef}>
+            <div className="flex min-h-0 min-w-0" style={split ? { width: `${splitRatio * 100}%` } : { flex: 1 }}>
+              <IdeEditor
+                active={active}
+                conflicted={conflicted}
+                cwd={cwd}
+                diff={diff}
+                onClone={() => void cloneRepo()}
+                onClose={closeTab}
+                onOpenRecent={path => void openFolderAsProject(path)}
+                onSelect={id => {
+                  setDiff(null)
+                  setActiveId(id)
+                }}
+                onSplit={splitActiveRight}
+                recentFolders={recentFolders}
+                tabs={tabs}
+              />
+            </div>
+            {split && (
+              <>
+                <PaneSash
+                  axis="x"
+                  onResize={delta => {
+                    const width = splitHostRef.current?.clientWidth || 0
+
+                    if (width <= 0) {
+                      return
+                    }
+
+                    setSplitRatio(current => {
+                      const next = clamp(current + delta / width, 0.25, 0.75)
+
+                      writeSize('split', next)
+
+                      return next
+                    })
+                  }}
+                />
+                <div className="flex min-h-0 min-w-0 flex-1">
+                  <IdeEditor
+                    active={secondary}
+                    cwd={cwd}
+                    diff={null}
+                    onClone={() => void cloneRepo()}
+                    onClose={id => {
+                      setSecondaryTabs(current => {
+                        const next = current.filter(tab => tab.id !== id)
+
+                        if (secondaryId === id) {
+                          setSecondaryId(next[0]?.id ?? null)
+                        }
+
+                        if (next.length === 0) {
+                          setSplit(false)
+                        }
+
+                        return next
+                      })
+                    }}
+                    onOpenRecent={path => void openFolderAsProject(path)}
+                    onSelect={id => setSecondaryId(id)}
+                    recentFolders={recentFolders}
+                    tabs={secondaryTabs}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+          {terminalOpen && (
+            <>
+              <PaneSash
+                axis="y"
+                onResize={delta =>
+                  setTerminalHeight(current => {
+                    const next = clamp(current - delta, 96, 520)
+
+                    writeSize('terminal', next)
+
+                    return next
+                  })
+                }
+              />
+              <div
+                className="flex shrink-0 border border-(--ui-stroke-secondary) bg-(--ui-terminal-surface-background)"
+                style={{ height: terminalHeight }}
+              >
+                <IdeBottomPanel
+                  cwd={cwd}
+                  fileName={active?.target.label || active?.target.path?.split(/[\\/]/).pop()}
+                  onClose={() => setTerminalOpen(false)}
+                  onTab={setBottomTab}
+                  tab={bottomTab}
+                />
+              </div>
+            </>
+          )}
+        </div>
+        {chatOpen && (
+          <>
+            <PaneSash
+              axis="x"
+              onResize={delta =>
+                setChatWidth(current => {
+                  const next = clamp(current - delta, 280, 640)
+
+                  writeSize('chat', next)
+
+                  return next
+                })
+              }
+            />
+            <div
+              className="flex h-full shrink-0 flex-col border-l border-(--ui-stroke-secondary) bg-background"
+              style={{ width: chatWidth }}
+            >
+              <IdeChatHeader
+                changesOpen={rightTab === 'changes'}
+                folder={folder}
+                onChanges={() => {
+                  setRightTab('changes')
+                  revealReview(cwd)
+                }}
+                onClose={() => setChatOpen(false)}
+                onShowChat={() => setRightTab('chat')}
+              />
+              <div className="min-h-0 flex-1">
+                {rightTab === 'changes' ? <ReviewPane embedded /> : <WiredPane part="chatRoutes" />}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+      <IdeStatusBar
+        cwd={cwd}
+        folder={folder}
+        onOpenProblems={() => {
+          setBottomTab('problems')
+          setTerminalOpen(true)
+        }}
+        onOpenTerminal={() => {
+          setTerminalOpen(true)
+          createTerminal(cwd || undefined, $ideShell.get())
+        }}
+        terminalOpen={terminalOpen}
+      />
+    </div>
+  )
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
+}
+
+function PaneSash({ axis, onResize }: { axis: 'x' | 'y'; onResize: (delta: number) => void }) {
+  const drag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    let last = axis === 'x' ? event.clientX : event.clientY
+
+    const move = (next: PointerEvent) => {
+      const point = axis === 'x' ? next.clientX : next.clientY
+
+      onResize(point - last)
+      last = point
+    }
+
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+    }
+
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+
+  return (
+    <div
+      className={cn(
+        'shrink-0 bg-transparent hover:bg-(--ui-stroke-secondary)',
+        axis === 'x' ? 'w-1 cursor-col-resize bg-(--ui-stroke-secondary)' : 'h-1 cursor-row-resize bg-(--ui-stroke-secondary)'
+      )}
+      onPointerDown={drag}
+    />
+  )
+}
+
+function IdeEditor({
+  active,
+  conflicted,
+  cwd,
+  diff,
+  recentFolders,
+  tabs,
+  onClone,
+  onClose,
+  onOpenRecent,
+  onSelect,
+  onSplit
+}: {
+  active: null | OpenTab
+  conflicted?: boolean
+  cwd: null | string
+  diff: null | string
+  recentFolders: { at: number; path: string }[]
+  tabs: OpenTab[]
+  onClone: () => void
+  onClose: (id: string) => void
+  onOpenRecent: (path: string) => void
+  onSelect: (id: string) => void
+  onSplit?: () => void
+}) {
+  const { t } = useI18n()
+
+  const folder =
+    cwd
+      ?.split(/[\\/]+/)
+      .filter(Boolean)
+      .pop() ?? ''
+
+  return (
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background">
+      {tabs.length > 0 && (
+        <div className="flex h-9 shrink-0 items-stretch overflow-x-auto border-b border-(--ui-stroke-secondary) bg-(--ui-bg-chrome)">
+          {tabs.map(tab => {
+            const selected = tab.id === active?.id && !diff
+
+            return (
+              <div
+                className={cn(
+                  'group flex max-w-52 min-w-0 items-center border-r border-(--ui-stroke-secondary)',
+                  selected ? 'bg-background text-foreground' : 'text-muted-foreground'
+                )}
+                key={tab.id}
+              >
+                <button
+                  className="flex h-9 min-w-0 flex-1 items-center gap-1 truncate px-3 text-left text-xs"
+                  onClick={() => onSelect(tab.id)}
+                  type="button"
+                >
+                  {tab.dirty && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-[#e2c08d]" />}
+                  <span className="truncate">{tab.target.label}</span>
+                </button>
+                <button
+                  aria-label={t.ide.closeTab}
+                  className="mr-1 flex size-5 items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-(--ui-control-hover-background)"
+                  onClick={() => onClose(tab.id)}
+                  type="button"
+                >
+                  <Codicon name="close" size={12} />
+                </button>
+              </div>
+            )
+          })}
+          {onSplit && active && (
+            <button
+              className="ml-auto flex h-9 shrink-0 items-center gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+              onClick={onSplit}
+              title={t.ide.splitEditor}
+              type="button"
+            >
+              <Codicon name="split-horizontal" size={14} />
+              {t.ide.splitEditor}
+            </button>
+          )}
+        </div>
+      )}
+      <div className="relative min-h-0 flex-1">
+        {diff ? (
+          <pre className="h-full overflow-auto p-3 text-xs whitespace-pre-wrap">{diff}</pre>
+        ) : conflicted && active?.target.path && cwd ? (
+          <IdeConflict cwd={cwd} path={active.target.path} />
+        ) : active ? (
+          <PreviewPane embedded onClose={() => onClose(active.id)} target={active.target} />
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+            {folder && <p className="text-sm text-foreground">{folder}</p>}
+            <p className="text-sm text-foreground">{t.ide.emptyTitle}</p>
+            <p className="max-w-sm text-xs text-muted-foreground">{t.ide.emptyBody}</p>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Button onClick={() => void openFolderAsProject()} size="sm" variant="secondary">
+                {t.ide.openFolder}
+              </Button>
+              <Button onClick={onClone} size="sm" variant="secondary">
+                {t.ide.cloneRepo}
+              </Button>
+            </div>
+            {recentFolders.length > 0 && (
+              <div className="mt-2 w-full max-w-sm text-left">
+                <p className="mb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  {t.ide.recentFolders}
+                </p>
+                {recentFolders.map(row => (
+                  <button
+                    className="flex h-7 w-full items-center truncate rounded px-2 text-left text-xs text-muted-foreground hover:bg-(--ui-control-hover-background) hover:text-foreground"
+                    key={row.path}
+                    onClick={() => onOpenRecent(row.path)}
+                    title={row.path}
+                    type="button"
+                  >
+                    {row.path}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function absEndsWith(cwd: null | string, relative: string, absolute: string) {
+  const left = `${(cwd || '').replace(/\\/g, '/')}/${relative.replace(/\\/g, '/')}`.replace(/\/+/g, '/').toLowerCase()
+  const right = absolute.replace(/\\/g, '/').toLowerCase()
+
+  return right === left || right.endsWith(`/${relative.replace(/\\/g, '/').toLowerCase()}`)
+}
