@@ -24,11 +24,19 @@ import { IdeActivityBar, type IdePanel } from './ide-activity'
 import { IdeChatHeader } from './ide-chats'
 import { $ideCommand } from './ide-commands'
 import { IdeConflict } from './ide-conflict'
+import {
+  closeIdeDocument,
+  markIdeDocumentClean,
+  markIdeDocumentDirty,
+  openIdeDocument
+} from './ide-documents'
 import { $ideSaveRequest, noteIdeEditor } from './ide-editor'
+import { setActiveIdeEditorGroup, syncIdeEditorGroup } from './ide-editor-groups'
 import { IdeExplorer } from './ide-explorer'
 import { IdeGit } from './ide-git'
 import { GITHUB_LOGIN_COMMAND, IdeGithub } from './ide-github'
 import { $ideOpenPath, $ideReveal, $ideSideTick, noteIdeFile, noteIdeTimeline, setIdeTitle, takeIdeHistoryMove } from './ide-nav'
+import { appendIdeOutput } from './ide-output'
 import { IdePanel as IdeBottomPanel, type IdeBottomTab } from './ide-panel'
 import { IdeSearch } from './ide-search'
 import {
@@ -157,12 +165,40 @@ export function IdeWorkspace() {
   }, [folder])
 
   useEffect(() => {
+    syncIdeEditorGroup(
+      'primary',
+      tabs.map(tab => tab.id),
+      activeId
+    )
+  }, [activeId, tabs])
+
+  useEffect(() => {
+    syncIdeEditorGroup(
+      'secondary',
+      secondaryTabs.map(tab => tab.id),
+      secondaryId
+    )
+  }, [secondaryId, secondaryTabs])
+
+  useEffect(() => {
     return $workspaceChangeTick.subscribe(() => {
       setTabs(current =>
-        current.map(tab => (tab.target.path ? { ...tab, dirty: true } : tab))
+        current.map(tab => {
+          if (tab.target.path) {
+            markIdeDocumentDirty(tab.target.path)
+          }
+
+          return tab.target.path ? { ...tab, dirty: true } : tab
+        })
       )
       setSecondaryTabs(current =>
-        current.map(tab => (tab.target.path ? { ...tab, dirty: true } : tab))
+        current.map(tab => {
+          if (tab.target.path) {
+            markIdeDocumentDirty(tab.target.path)
+          }
+
+          return tab.target.path ? { ...tab, dirty: true } : tab
+        })
       )
       setChatOpen(true)
       setRightTab('changes')
@@ -185,6 +221,7 @@ export function IdeWorkspace() {
         return
       }
 
+      markIdeDocumentClean(path)
       setTabs(current => current.map(tab => (tab.target.path === path ? { ...tab, dirty: false } : tab)))
       setSecondaryTabs(current => current.map(tab => (tab.target.path === path ? { ...tab, dirty: false } : tab)))
     })
@@ -263,12 +300,15 @@ export function IdeWorkspace() {
         setSecondaryTabs(current => (current.some(tab => tab.id === id) ? current : [...current, { id, target: preview }]))
         setSecondaryId(id)
         setSplit(true)
+        setActiveIdeEditorGroup('secondary')
       } else {
         setTabs(current => (current.some(tab => tab.id === id) ? current : [...current, { id, target: preview }]))
         setActiveId(id)
+        setActiveIdeEditorGroup('primary')
       }
 
       if (preview.path) {
+        openIdeDocument(preview.path)
         noteIdeTimeline(preview.path)
       }
     } catch (error) {
@@ -334,9 +374,23 @@ export function IdeWorkspace() {
       .pop()
     const dest = `${parent.replace(/[/\\]+$/, '')}\\${name}`
 
+    setBottomTab('output')
     setTerminalOpen(true)
+    appendIdeOutput(`git clone -- ${url} ${dest}`)
     ensureTerminal()
-    $terminalInjection.set(`git clone -- ${JSON.stringify(url)} ${JSON.stringify(dest)}; if ($LASTEXITCODE -eq 0) { Set-Location -LiteralPath ${JSON.stringify(dest)} }`)
+    $terminalInjection.set(
+      `git clone -- ${JSON.stringify(url)} ${JSON.stringify(dest)}; if ($LASTEXITCODE -eq 0) { Set-Location -LiteralPath ${JSON.stringify(dest)} }`
+    )
+
+    const opened = await waitForGitClone(dest)
+
+    if (opened) {
+      appendIdeOutput(t.ide.cloneOpened.replace('{path}', dest))
+      await openFolderAsProject(dest)
+    } else {
+      appendIdeOutput(t.ide.cloneTimedOut)
+      notifyError(new Error(t.ide.cloneTimedOut), t.ide.cloneTimedOut)
+    }
   }
 
   const splitActiveRight = () => {
@@ -369,6 +423,12 @@ export function IdeWorkspace() {
 
   const closeTab = (id: string) => {
     setTabs(current => {
+      const closing = current.find(tab => tab.id === id)
+
+      if (closing?.target.path) {
+        closeIdeDocument(closing.target.path)
+      }
+
       const index = current.findIndex(tab => tab.id === id)
       const next = current.filter(tab => tab.id !== id)
 
@@ -548,6 +608,13 @@ export function IdeWorkspace() {
                 diff={diff}
                 onClone={() => void cloneRepo()}
                 onClose={closeTab}
+                onMarkClean={path => {
+                  markIdeDocumentClean(path)
+                  setTabs(current => current.map(tab => (tab.target.path === path ? { ...tab, dirty: false } : tab)))
+                  setSecondaryTabs(current =>
+                    current.map(tab => (tab.target.path === path ? { ...tab, dirty: false } : tab))
+                  )
+                }}
                 onOpenRecent={path => void openFolderAsProject(path)}
                 onSelect={id => {
                   setDiff(null)
@@ -734,6 +801,7 @@ function IdeEditor({
   tabs,
   onClone,
   onClose,
+  onMarkClean,
   onOpenRecent,
   onSelect,
   onSplit
@@ -746,6 +814,7 @@ function IdeEditor({
   tabs: OpenTab[]
   onClone: () => void
   onClose: (id: string) => void
+  onMarkClean?: (path: string) => void
   onOpenRecent: (path: string) => void
   onSelect: (id: string) => void
   onSplit?: () => void
@@ -809,7 +878,17 @@ function IdeEditor({
         {diff ? (
           <pre className="h-full overflow-auto p-3 text-xs whitespace-pre-wrap">{diff}</pre>
         ) : conflicted && active?.target.path && cwd ? (
-          <IdeConflict cwd={cwd} path={active.target.path} />
+          <IdeConflict
+            cwd={cwd}
+            onSaved={() => {
+              const path = active.target.path
+
+              if (path) {
+                onMarkClean?.(path)
+              }
+            }}
+            path={active.target.path}
+          />
         ) : active ? (
           <PreviewPane embedded onClose={() => onClose(active.id)} target={active.target} />
         ) : (
@@ -855,4 +934,36 @@ function absEndsWith(cwd: null | string, relative: string, absolute: string) {
   const right = absolute.replace(/\\/g, '/').toLowerCase()
 
   return right === left || right.endsWith(`/${relative.replace(/\\/g, '/').toLowerCase()}`)
+}
+
+/** Poll until `gitRoot(dest)` resolves — clone finished enough to open as a project. */
+async function waitForGitClone(dest: string, timeoutMs = 600_000): Promise<boolean> {
+  const gitRoot = window.hermesDesktop?.gitRoot
+
+  if (!gitRoot) {
+    return false
+  }
+
+  const target = dest.replace(/[/\\]+$/, '').replace(/\\/g, '/').toLowerCase()
+  const started = Date.now()
+
+  while (Date.now() - started < timeoutMs) {
+    try {
+      const root = await gitRoot(dest)
+
+      if (root) {
+        const normalized = root.replace(/[/\\]+$/, '').replace(/\\/g, '/').toLowerCase()
+
+        if (normalized === target) {
+          return true
+        }
+      }
+    } catch {
+      // Destination may not exist yet while git clone is still running.
+    }
+
+    await new Promise(resolve => window.setTimeout(resolve, 800))
+  }
+
+  return false
 }

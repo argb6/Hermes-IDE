@@ -18,7 +18,8 @@ import { Codicon } from '@/components/ui/codicon'
 import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
 
-import { $ideShell, IDE_SHELLS, setIdeShell, type IdeShell } from './ide-shells'
+import { $ideOutput, clearIdeOutput } from './ide-output'
+import { $ideShell, IDE_SHELLS, type IdeShell, setIdeShell } from './ide-shells'
 
 const TABS = ['problems', 'output', 'debug', 'terminal', 'ports'] as const
 
@@ -41,6 +42,7 @@ export function IdePanel({
   const { t } = useI18n()
   const terminals = useStore($terminals)
   const activeId = useStore($activeTerminalId)
+  const outputLines = useStore($ideOutput)
   const [localTab, setLocalTab] = useState<IdeBottomTab>(tab ?? 'terminal')
   const shownTab = tab ?? localTab
   const setTab = (next: IdeBottomTab) => {
@@ -334,7 +336,27 @@ export function IdePanel({
       <div className={cn('min-h-0 flex-1', shownTab === 'terminal' ? 'flex' : 'hidden')}>
         <TerminalPaneChrome showRail={false} />
       </div>
-      {shownTab !== 'terminal' && <p className="px-3 py-2 text-xs text-muted-foreground">{empty[shownTab]}</p>}
+      {shownTab === 'output' && (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex shrink-0 items-center justify-end border-b border-(--ui-stroke-secondary) px-2 py-1">
+            <button
+              className="rounded px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-(--ui-control-hover-background) hover:text-foreground"
+              onClick={() => clearIdeOutput()}
+              type="button"
+            >
+              {t.ide.clearOutput}
+            </button>
+          </div>
+          <pre className="min-h-0 flex-1 overflow-auto p-3 font-mono text-xs leading-5 whitespace-pre-wrap text-foreground">
+            {outputLines.length === 0
+              ? empty.output
+              : outputLines.map(line => line.text).join('\n')}
+          </pre>
+        </div>
+      )}
+      {shownTab !== 'terminal' && shownTab !== 'output' && (
+        <p className="px-3 py-2 text-xs text-muted-foreground">{empty[shownTab]}</p>
+      )}
     </div>
   )
 }

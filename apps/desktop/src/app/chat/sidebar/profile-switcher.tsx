@@ -106,6 +106,7 @@ import { FleetGatewayMenuGroup } from './fleet-gateway-menu-group'
 import { buildRestGroups, countRestAgents, type FleetAgent, type FleetGroup, fleetRouteKey } from './fleet-rail'
 import { useLocalDeviceSwitch } from './local-device-switch'
 import { ProfileLaunchContextMenu, ProfileLaunchMenuSection } from './profile-launch-menu'
+import { ProfileRailGatewayStatus } from './profile-rail-gateway-status'
 import { ProfileRemoteOverrideDialog } from './profile-remote-override-dialog'
 import { useFleetRoster } from './use-fleet-roster'
 import { useProfilePrewarm } from './use-profile-prewarm'
@@ -566,6 +567,10 @@ export function ProfileRail() {
           profile={defaultProfile.name}
         />
       )}
+
+      {/* Live gateway status sits in the left-bottom empty stretch of the
+          profile rail (between home and the +/import/manage cluster). */}
+      <ProfileRailGatewayStatus />
 
       {condensed ? (
         // Condensed path: one compact dropdown instead of N squares. No drag

@@ -5,7 +5,7 @@ import type { DesktopVersionInfo } from '@/global'
 import { I18nProvider } from '@/i18n'
 import { $previewTabs, closeRightRail } from '@/store/preview'
 
-import { VersionDetails } from './version-details'
+import { HERMES_LOCAL_REPO_URL, VersionDetails } from './version-details'
 
 afterEach((): void => {
   cleanup()
@@ -87,7 +87,7 @@ describe('VersionDetails', () => {
     // clone (live provenance, no receipt): both honestly say Source.
     { version: { installedByScript: true }, visible: ['Source (install script)'] },
     { version: { source: 'git' }, visible: ['Distribution', 'Source'], absent: ['Source (install script)'] },
-    { version: {}, visible: ['Version'], absent: ['Distribution'] }
+    { version: {}, visible: ['Version', 'Project', 'Repository'], absent: ['Distribution'] }
   ]
 
   it.each(cases)('renders $version', ({ version, visible, absent = [] }: VersionCase): void => {
@@ -110,6 +110,21 @@ describe('VersionDetails', () => {
     }
   })
 
+  it('shows the hermes-local fork notice and repository', (): void => {
+    render(
+      <I18nProvider configClient={null} initialLocale="en">
+        <VersionDetails version={baseVersion} />
+      </I18nProvider>
+    )
+
+    expect(
+      screen.getByText(
+        'hermes-local: a local fork of NousResearch/hermes-agent for day-to-day Desktop IDE use and local development.'
+      )
+    ).toBeTruthy()
+    expect(screen.getByText('argb6/hermes-local')).toBeTruthy()
+  })
+
   it('opens the commit URL via the system-browser bridge without opening a preview tab', async () => {
     const openExternal: Mock<Window['hermesDesktop']['openExternal']> = vi
       .fn<Window['hermesDesktop']['openExternal']>()
@@ -127,7 +142,7 @@ describe('VersionDetails', () => {
 
     await waitFor(() => {
       expect(openExternal).toHaveBeenCalledWith(
-        'https://github.com/NousResearch/hermes-agent/commit/d233b6d7a9c5b79288e48dfb3b29e2ead106ac73'
+        `${HERMES_LOCAL_REPO_URL}/commit/d233b6d7a9c5b79288e48dfb3b29e2ead106ac73`
       )
     })
     expect($previewTabs.get()).toHaveLength(0)

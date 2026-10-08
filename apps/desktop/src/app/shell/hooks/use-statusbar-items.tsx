@@ -123,7 +123,6 @@ export function useStatusbarItems({
   const terminalShowing = useStore($paneVisible('terminal'))
   const sessionsShowing = useStore($paneVisible('sessions'))
   const profileRailVisible = useStore($profileRailVisible)
-  const botsShowing = useStore($paneVisible('hermes-bots:pane'))
   const primaryBusy = useStore($busy)
   // Draft / primary composer atom — used only while the focused surface is the
   // primary (or a draft with no runtime slice yet). A focused TILE keeps its
@@ -513,8 +512,6 @@ export function useStatusbarItems({
       },
       {
         className: gatewayRestarting ? undefined : gatewayClassName,
-        detail: gatewayHealth.detail,
-        hidden: botsShowing,
         icon: gatewayRestarting ? (
           <GlyphSpinner ariaLabel={copy.gatewayRestarting} className="size-3" />
         ) : inferenceReady ? (
@@ -523,13 +520,20 @@ export function useStatusbarItems({
           <AlertCircle className="size-3" />
         ),
         id: 'gateway-health',
-        label: gatewayHealth.label,
+        // Live gateway status for Agent mode (same wording as IDE):
+        // "网关 就绪 / 连接中 / 离线 …" — not the static "后端" noun.
+        label: (
+          <span className="inline-flex items-center gap-1">
+            <span>{copy.gatewayTitle}</span>
+            <span>{gatewayHealth.detail}</span>
+          </span>
+        ),
         lockedVisible: true,
         menuClassName: 'w-72',
         menuContent: gatewayMenuContent,
         // Tip only when there's a real status reason — not a restatement of the label.
-        title: gatewayHealth.title || inferenceStatus?.reason || undefined,
-        toggleLabel: copy.backend,
+        title: gatewayHealth.title || inferenceStatus?.reason || gatewayHealth.detail || undefined,
+        toggleLabel: copy.gatewayTitle,
         variant: 'menu'
       },
       {
@@ -647,7 +651,6 @@ export function useStatusbarItems({
     ],
     [
       agentsOpen,
-      botsShowing,
       commandCenterOpen,
       copy,
       currentCwd,

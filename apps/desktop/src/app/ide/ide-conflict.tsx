@@ -5,7 +5,11 @@ import { useI18n } from '@/i18n'
 import { writeDesktopFileText } from '@/lib/desktop-fs'
 import { desktopGit } from '@/lib/desktop-git'
 import { cn } from '@/lib/utils'
+import { refreshRepoStatus } from '@/store/coding-status'
 import { notifyError } from '@/store/notifications'
+
+import { markIdeDocumentClean, repoRelativePath } from './ide-documents'
+import { appendIdeOutput } from './ide-output'
 
 interface IdeConflictProps {
   cwd: string
@@ -61,6 +65,17 @@ export function IdeConflict({ cwd, onSaved, path }: IdeConflictProps) {
 
     try {
       await writeDesktopFileText(path, result)
+      markIdeDocumentClean(path)
+
+      const relative = repoRelativePath(cwd, path)
+      const review = desktopGit()?.review
+
+      if (relative && review?.stage) {
+        await review.stage(cwd, relative)
+        appendIdeOutput(`git add -- ${relative}`)
+        refreshRepoStatus(cwd)
+      }
+
       setDirty(false)
       onSaved?.()
     } catch (error) {

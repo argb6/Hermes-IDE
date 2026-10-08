@@ -598,6 +598,9 @@ export interface Translations {
     cloneRepo: string
     clonePrompt: string
     cloneInvalid: string
+    cloneOpened: string
+    cloneTimedOut: string
+    clearOutput: string
     recentFolders: string
     splitEditor: string
     push: string
@@ -3635,6 +3638,10 @@ export interface Translations {
     releaseAvailable: (tag: string) => string
     versionDetailsTitle: string
     versionDetailsBody: string
+    versionDetailsProject: string
+    versionDetailsProjectBody: string
+    versionDetailsRepository: string
+    versionDetailsBasics: string
     versionDetailsVersion: string
     versionDetailsCommit: string
     versionDetailsBuildOrigin: string

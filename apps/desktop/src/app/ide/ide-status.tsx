@@ -1,9 +1,13 @@
 import { useStore } from '@nanostores/react'
 import { Activity, AlertCircle, Loader2 } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router'
 
+import { COMMAND_CENTER_ROUTE } from '@/app/routes'
+import { GatewayMenuPanel } from '@/app/shell/gateway-menu-panel'
 import { useStatusSnapshot } from '@/app/shell/hooks/use-status-snapshot'
 import { Codicon } from '@/components/ui/codicon'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useI18n } from '@/i18n'
 import { statusBarGatewayHealth } from '@/lib/gateway-health-pill'
 import { cn } from '@/lib/utils'
@@ -33,17 +37,18 @@ export function IdeStatusBar({
   onOpenTerminal: () => void
 }) {
   const { t } = useI18n()
+  const navigate = useNavigate()
   const byCwd = useStore($repoStatusByCwd)
   const encoding = useStore($fileEncoding)
   const editor = useStore($ideEditor)
   const [encodings, setEncodings] = useState(false)
   const [checkout, setCheckout] = useState(false)
+  const [gatewayMenuOpen, setGatewayMenuOpen] = useState(false)
   const status = cwd ? (byCwd[cwd] ?? null) : null
 
   useEffect(() => registerRepoStatusCwd(cwd), [cwd])
 
-  // Gateway link status — the same derivation the agent statusbar uses, kept
-  // read-only here (IDE has no command center to open the gateway menu from).
+  // Same gateway pill as agent mode — clickable menu for restart / logs / system.
   const gatewayState = useStore($gatewayState)
   const activeConnectionId = useStore($activeConnectionId)
   const activeGatewayProfile = useStore($activeGatewayProfile)
@@ -84,25 +89,52 @@ export function IdeStatusBar({
   const gatewayClassName = inferenceReady
     ? undefined
     : gatewayDegraded
-      ? 'text-amber-600'
-      : 'text-destructive'
+      ? 'text-amber-600 hover:text-amber-600'
+      : 'text-destructive hover:text-destructive'
+
+  const gatewayMenu = useMemo(
+    () => (
+      <GatewayMenuPanel
+        gatewayState={gatewayState ?? ''}
+        inferenceStatus={inferenceStatus}
+        onClose={() => setGatewayMenuOpen(false)}
+        onOpenSystem={() => {
+          setGatewayMenuOpen(false)
+          navigate(`${COMMAND_CENTER_ROUTE}?section=system`)
+        }}
+        statusSnapshot={statusSnapshot}
+      />
+    ),
+    [gatewayState, inferenceStatus, navigate, statusSnapshot]
+  )
 
   return (
     <div className="flex h-6 shrink-0 items-center gap-3 border-t border-(--ui-stroke-secondary) bg-(--ui-bg-chrome) px-2 text-[12px] text-muted-foreground">
-      <span
-        className={cn('flex shrink-0 items-center gap-1', gatewayClassName)}
-        title={gatewayHealth.title || inferenceStatus?.reason || gatewayHealth.detail || undefined}
-      >
-        {gatewayRestarting ? (
-          <Loader2 aria-hidden className="size-3 animate-spin" />
-        ) : inferenceReady ? (
-          <Activity aria-hidden className="size-3" />
-        ) : (
-          <AlertCircle aria-hidden className="size-3" />
-        )}
-        <span>{copy.gatewayTitle}</span>
-        <span>{gatewayHealth.label}</span>
-      </span>
+      <DropdownMenu onOpenChange={setGatewayMenuOpen} open={gatewayMenuOpen}>
+        <DropdownMenuTrigger asChild>
+          <button
+            className={cn(
+              'flex shrink-0 items-center gap-1 rounded-none hover:text-foreground',
+              gatewayClassName
+            )}
+            title={gatewayHealth.title || inferenceStatus?.reason || gatewayHealth.detail || undefined}
+            type="button"
+          >
+            {gatewayRestarting ? (
+              <Loader2 aria-hidden className="size-3 animate-spin" />
+            ) : inferenceReady ? (
+              <Activity aria-hidden className="size-3" />
+            ) : (
+              <AlertCircle aria-hidden className="size-3" />
+            )}
+            <span>{copy.gatewayTitle}</span>
+            <span>{gatewayHealth.detail}</span>
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-72 p-0" side="top" sideOffset={8}>
+          {gatewayMenu}
+        </DropdownMenuContent>
+      </DropdownMenu>
       <div className="relative">
         <button
           className="flex items-center gap-1 hover:text-foreground"

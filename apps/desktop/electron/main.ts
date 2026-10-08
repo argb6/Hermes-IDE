@@ -5654,7 +5654,7 @@ function fetchJson(url, token, options: any = {}) {
               // ``options.bearer`` is set we send Authorization: Bearer ***
               // the gateway's OAuth gate verifies it via the provider stack with
               // no cookie involved.
-              ...(options.bearer ? { Authorization: *** ${options.bearer}` } : {}),
+              ...(options.bearer ? { Authorization: `Bearer ${options.bearer}` } : {}),
               ...(body ? { 'Content-Length': String(body.length) } : {})
             }
           },

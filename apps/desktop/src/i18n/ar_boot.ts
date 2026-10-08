@@ -110,6 +110,11 @@ export const arBoot = {
     daysAgo: count => `قبل ${count} يوم`,
     versionDetailsTitle: 'تفاصيل الإصدار',
     versionDetailsBody: 'هذا التثبيت مُدار خارج التطبيق. حدّثه بالطريقة نفسها التي استخدمتها لتثبيته.',
+    versionDetailsProject: 'المشروع',
+    versionDetailsProjectBody:
+      'hermes-local: فرع محلي من NousResearch/hermes-agent لاستخدام Desktop IDE يومياً.',
+    versionDetailsRepository: 'المستودع',
+    versionDetailsBasics: 'الإصدار',
     versionDetailsVersion: 'الإصدار',
     versionDetailsCommit: 'الالتزام',
     versionDetailsBuildOrigin: 'مصدر البناء',

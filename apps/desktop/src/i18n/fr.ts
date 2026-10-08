@@ -4475,6 +4475,11 @@ export const frOverrides = {
     versionDetailsTitle: 'Détails de la version',
     versionDetailsBody:
       "Cette installation est gérée hors de l'application. Mettez-la à jour de la même manière que vous l'avez installée.",
+    versionDetailsProject: 'Projet',
+    versionDetailsProjectBody:
+      'hermes-local : fork local de NousResearch/hermes-agent pour l’IDE Desktop au quotidien.',
+    versionDetailsRepository: 'Dépôt',
+    versionDetailsBasics: 'Version',
     versionDetailsVersion: 'Version',
     versionDetailsCommit: 'Commit',
     versionDetailsBuildOrigin: 'Origine de la compilation',

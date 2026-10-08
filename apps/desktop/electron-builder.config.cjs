@@ -109,7 +109,8 @@ module.exports = {
     desktopName: appId
   },
   directories: {
-    output: 'release'
+    // Temporary alternate dir while a live Hermes holds release\win-unpacked.
+    output: process.env.HERMES_DESKTOP_RELEASE_DIR || 'release'
   },
   files: ['dist/**', 'assets/**', 'public/**', 'package.json'],
   beforeBuild: channelRequest ? async () => {
