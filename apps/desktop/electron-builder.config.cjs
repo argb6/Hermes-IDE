@@ -245,8 +245,11 @@ module.exports = {
     extraResources: [{ from: 'scripts/update-relaunch-waiter.ps1', to: 'update-relaunch-waiter.ps1' }],
     ...windowsSigning()
   },
-  // Hermes-IDE assisted installer: pick a folder, warn that it will be wiped,
-  // then clear that directory before files are extracted (see assets/installer-wipe-dir.nsh).
+  // Hermes-IDE assisted installer: pick a folder. Setup nests an app-named
+  // subfolder when needed, refuses drive roots and common user/system
+  // directories, and aborts if that folder is not empty (an /updated upgrade
+  // may reuse it). It never deletes existing files
+  // (see assets/installer-wipe-dir.nsh).
   nsis: {
     oneClick: false,
     perMachine: false,
