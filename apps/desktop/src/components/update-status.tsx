@@ -25,7 +25,6 @@ import {
 } from '@/store/updates'
 
 const RELEASE_NOTES_URL = 'https://github.com/NousResearch/hermes-agent/releases'
-const INSTALLER_URL = 'https://hermes-agent.nousresearch.com/'
 
 export type UpdateStatusTone = 'idle' | 'available' | 'error' | 'unsupported'
 
@@ -186,41 +185,22 @@ export function VersionHero({
             : ''}
         </p>
       </div>
-      {(version?.bundleSwapPending || version?.bundleOutOfSync) && (
+      {version?.bundleSwapPending && (
         <div className="mx-auto w-full max-w-2xl rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-left text-sm">
           <div className="flex items-start gap-2">
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
             <div className="min-w-0">
-              <p className="font-medium">{version.bundleSwapPending ? u.bundleSwapPending : u.bundleOutOfSync}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {version.bundleSwapPending ? u.bundleSwapPendingDesc : u.bundleOutOfSyncDesc}
-              </p>
-              {version.bundleSwapPending ? (
-                <Button
-                  className="mt-2"
-                  onClick={() => void window.hermesDesktop?.relaunchApp?.()}
-                  size="sm"
-                  variant="textStrong"
-                >
-                  <RefreshCw className="size-3" />
-                  {u.bundleSwapPendingAction}
-                </Button>
-              ) : (
-                <Button asChild className="mt-2" size="sm" variant="textStrong">
-                  <a
-                    href={INSTALLER_URL}
-                    onClick={event => {
-                      event.preventDefault()
-                      void window.hermesDesktop?.openExternal?.(INSTALLER_URL)
-                    }}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    <ExternalLink className="size-3" />
-                    {u.bundleOutOfSyncAction}
-                  </a>
-                </Button>
-              )}
+              <p className="font-medium">{u.bundleSwapPending}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{u.bundleSwapPendingDesc}</p>
+              <Button
+                className="mt-2"
+                onClick={() => void window.hermesDesktop?.relaunchApp?.()}
+                size="sm"
+                variant="textStrong"
+              >
+                <RefreshCw className="size-3" />
+                {u.bundleSwapPendingAction}
+              </Button>
             </div>
           </div>
         </div>

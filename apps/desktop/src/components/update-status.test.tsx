@@ -180,17 +180,16 @@ describe('VersionHero bundle banners', () => {
     expect(relaunchApp).toHaveBeenCalledTimes(1)
   })
 
-  it('out-of-sync without a pending swap: keeps the get-installer banner', () => {
+  it('out-of-sync without a pending swap: no get-installer banner', () => {
     stubRelaunch()
 
     render(<VersionHero version={version({ bundleOutOfSync: true })} />)
 
-    expect(screen.getByText(en.updates.bundleOutOfSync)).toBeTruthy()
+    expect(screen.queryByText(en.updates.bundleOutOfSync)).toBeNull()
     expect(screen.queryByText(en.updates.bundleSwapPending)).toBeNull()
-    expect(screen.queryByRole('button', { name: en.updates.bundleSwapPendingAction })).toBeNull()
   })
 
-  it('a pending swap wins over the out-of-sync banner — restart, not reinstall', () => {
+  it('a pending swap still shows restart even when also marked out-of-sync', () => {
     stubRelaunch()
 
     render(<VersionHero version={version({ bundleOutOfSync: true, bundleSwapPending: true })} />)
