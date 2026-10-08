@@ -7,7 +7,7 @@ import { TreeSkeleton } from '@/components/chat/skeletons'
 import { Codicon } from '@/components/ui/codicon'
 import { markRightPanePerf } from '@/debug/right-pane-events'
 import { useResizeObserver } from '@/hooks/use-resize-observer'
-import { materialIconForFolder, materialIconForPath } from '@/lib/file-icons'
+import { materialIconForPath } from '@/lib/file-icons'
 import { cn } from '@/lib/utils'
 import { $repoStatusByCwd, type RepoChangeTone, type RepoFileChange, repoChangeKindForPath, repoFolderChangeForPath } from '@/store/coding-status'
 import { $renamingPath, beginInlineRename } from '@/store/file-actions'
@@ -365,13 +365,9 @@ function ProjectTreeRow({
   const isErrorPlaceholder = node.data.placeholder === 'error'
   const editing = !isPlaceholder && renamingPath === node.data.id
   const fileIcon = !isFolder && !isPlaceholder ? fileGlyph(node.data.id) : null
-  // VS Code Material Icon Theme (bundled offline). Codicon stays as a last
-  // resort when a path somehow has no theme entry.
-  const materialIcon = isPlaceholder
-    ? null
-    : isFolder
-      ? materialIconForFolder(node.data.id, node.isOpen)
-      : materialIconForPath(node.data.id)
+  // Files use the bundled Material Icon Theme; folders stay on the default
+  // Codicon folder / folder-opened glyphs (open state is the expand cue).
+  const materialIcon = isPlaceholder || isFolder ? null : materialIconForPath(node.data.id)
   const tone = isFolder ? folderChange?.change.tone : change?.tone
   const markColor = tone ? CHANGE_COLOR[tone] : undefined
 
