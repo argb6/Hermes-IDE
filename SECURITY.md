@@ -1,15 +1,14 @@
-# Hermes Agent Security Policy
+# Hermes IDE Security Policy
 
-This document describes Hermes Agent's trust model, names the one
+This document describes Hermes IDE's trust model, names the one
 security boundary the project treats as load-bearing, and defines the
 scope for vulnerability reports.
 
 ## 1. Reporting a Vulnerability
 
-Report privately via [GitHub Security Advisories](https://github.com/NousResearch/hermes-agent/security/advisories/new)
-or **security@nousresearch.com**. Do not open public issues for
-security vulnerabilities. **Hermes Agent does not operate a bug
-bounty program.**
+Report privately via [GitHub Security Advisories](https://github.com/argb6/Hermes-IDE/security/advisories/new).
+Do not open public issues for security vulnerabilities. **Hermes IDE
+does not operate a bug bounty program.**
 
 A useful report includes:
 
@@ -329,7 +328,6 @@ that:
 
 - **Coordinated disclosure window:** 90 days from report, or until a
   fix is released, whichever comes first.
-- **Channel:** the GHSA thread or email correspondence with
-  security@nousresearch.com.
+- **Channel:** the GHSA thread for this repository.
 - **Credit:** reporters are credited in release notes unless
   anonymity is requested.
