@@ -872,20 +872,17 @@ export function useGatewayBoot({
           return
         }
 
+        // Drop the connecting overlay as soon as the gateway session is up;
+        // cwd / config / sessions fill in behind the shell (same contract as
+        // cold boot — sidebar may be briefly empty).
+        completeDesktopBoot()
+        bootCompleted = true
         void refreshActiveProfile().catch(() => undefined)
-
-        await Promise.all([
+        void Promise.all([
           seedDefaultCwd(ownsSwitch),
           callbacksRef.current.refreshHermesConfig(false, ownsSwitch).catch(() => undefined),
           callbacksRef.current.refreshSessions(ownsSwitch).catch(() => undefined)
         ])
-
-        if (!ownsSwitch()) {
-          return
-        }
-
-        completeDesktopBoot()
-        bootCompleted = true
         // Rediscover local-runtime jobs (model downloads, runtime installs)
         // that were running before a reload — the backend registry is the
         // authority; this just resumes following it.
@@ -1561,24 +1558,25 @@ export function useGatewayBoot({
         void reportStartupLatency(desktop, (method, params) => gateway.request(method, params))
 
         // Profile adoption must land first: refreshSessions scopes its fetch by
-        // $profileScope ← $activeGatewayProfile. The remaining three fetches
-        // (cwd seed, config, sessions) are independent REST calls — running
-        // them serially added their sum to time-to-populated-sidebar when only
-        // the max is needed.
+        // $profileScope ← $activeGatewayProfile. Dismiss the cold-boot overlay
+        // as soon as the WS session is open — waiting on config/sessions REST
+        // only delayed time-to-shell while the gateway was already usable.
         await adoptPrimaryProfile(conn)
 
-        setDesktopBootStep({
-          phase: 'renderer.config',
-          message: translateNow('boot.steps.loadingSettings'),
-          progress: 97
-        })
+        if (cancelled) {
+          return
+        }
 
-        await Promise.all([
+        completeDesktopBoot()
+        bootCompleted = true
+        bootRetryAttempt = 0
+
+        void Promise.all([
           // The pre-connect seed already applied the configured default; this
           // post-connect pass covers the remote backend default. Non-fatal: a
           // failed sync must not abort boot (the remembered cwd remains).
           seedDefaultCwd().catch(err => console.warn('Failed to sync default workspace cwd post-connect', err)),
-          callbacksRef.current.refreshHermesConfig(),
+          callbacksRef.current.refreshHermesConfig().catch(() => undefined),
           // Session-list population is never boot-fatal. The gateway WS is
           // already open by this point — a failed sidebar fetch (transient
           // blip, or an endpoint the fallback couldn't cover) must leave the
@@ -1589,14 +1587,6 @@ export function useGatewayBoot({
             setSessionsLoading(false)
           })
         ])
-
-        if (cancelled) {
-          return
-        }
-
-        completeDesktopBoot()
-        bootCompleted = true
-        bootRetryAttempt = 0
         // A Docker/SSH terminal backend that fails its probe means shell
         // commands silently cannot run — say so once, with a way out. Cold
         // launch is the common path, so it must warn too, not only softSwitch.

@@ -318,17 +318,20 @@ it('loads and tracks saved gateways without mounting the statusbar or Settings',
   ;(window as { hermesDesktop?: unknown }).hermesDesktop = desktop
 
   // Only the real gateway lifecycle mounts; no optional UI can load the cache.
+  // Hold refreshSessions open: overlay must still dismiss once WS+profile
+  // land (sessions fill the sidebar in the background).
   const view = render(<Harness refreshSessions={() => bootFetch.promise} />)
   await flushAsync()
 
   expect($connectionsRegistry.get()).toEqual(registry)
-  expect($desktopBoot.get().running).toBe(true)
-  expect(setLastUsed).not.toHaveBeenCalled()
+  expect($desktopBoot.get().running).toBe(false)
+  expect($desktopBoot.get().visible).toBe(false)
+  expect($desktopBoot.get().phase).toBe('renderer.ready')
+  expect(setLastUsed).toHaveBeenCalledExactlyOnceWith(primaryConn.connectionId)
 
   bootFetch.resolve()
   await flushAsync()
   expect($desktopBoot.get().running).toBe(false)
-  expect(setLastUsed).toHaveBeenCalledExactlyOnceWith(primaryConn.connectionId)
 
   const activeConnection = $connection.get()
   registry = {
@@ -606,7 +609,14 @@ describe('primary failure foreground isolation', () => {
           unsupportedPlatform: null,
           bundled: false
         })),
-        getConnectionConfig: vi.fn(async () => ({ mode: 'cloud', remoteAuthMode: 'oauth', remoteUrl: cloud.baseUrl })),
+        // Overlay reauth classification keys off mode === 'remote' (see
+        // isRemoteConfig); 'cloud' is a main-process synonym and is not
+        // accepted by the renderer helper.
+        getConnectionConfig: vi.fn(async () => ({
+          mode: 'remote',
+          remoteAuthMode: 'oauth',
+          remoteUrl: cloud.baseUrl
+        })),
         getConnectionFor: vi.fn(async () => ({
           ...coderConn,
           connectionId: 'local',
@@ -1971,6 +1981,70 @@ describe('useGatewayBoot remote reconnect loop (real hook, fake socket)', () => 
     expect($desktopBoot.get().phase).toBe('renderer.ready')
   })
 
+  it('dismisses the cold-boot overlay as soon as WS+profile land — config/sessions may still be in flight', async () => {
+    const sessionsHeld = deferred<void>()
+    const configHeld = deferred<void>()
+    let sessionsStarted = false
+    let configStarted = false
+
+    const refreshSessions = vi.fn(async () => {
+      sessionsStarted = true
+      await sessionsHeld.promise
+    })
+    const refreshHermesConfig = vi.fn(async () => {
+      configStarted = true
+      await configHeld.promise
+    })
+
+    render(<Harness refreshSessions={refreshSessions} refreshHermesConfig={refreshHermesConfig} />)
+    await flushAsync()
+
+    expect($gatewayState.get()).toBe('open')
+    expect(sessionsStarted).toBe(true)
+    expect(configStarted).toBe(true)
+    expect($desktopBoot.get().running).toBe(false)
+    expect($desktopBoot.get().visible).toBe(false)
+    expect($desktopBoot.get().phase).toBe('renderer.ready')
+    expect($desktopBoot.get().error).toBeNull()
+
+    sessionsHeld.resolve()
+    configHeld.resolve()
+    await flushAsync()
+    expect($desktopBoot.get().running).toBe(false)
+  })
+
+  it('softSwitch dismisses the overlay after adopt before config/sessions finish', async () => {
+    let switchRefresh = 0
+    const switchSessionsHeld = deferred<void>()
+
+    const refreshSessions = vi.fn(async (shouldPublish?: () => boolean) => {
+      if (!shouldPublish) {
+        return
+      }
+
+      switchRefresh += 1
+
+      if (switchRefresh === 1) {
+        await switchSessionsHeld.promise
+      }
+    })
+
+    render(<Harness refreshSessions={refreshSessions} />)
+    await flushAsync()
+    expect($desktopBoot.get().phase).toBe('renderer.ready')
+
+    act(() => connectionApplied?.())
+    await vi.waitFor(() => expect(switchRefresh).toBe(1))
+
+    expect($desktopBoot.get().running).toBe(false)
+    expect($desktopBoot.get().visible).toBe(false)
+    expect($desktopBoot.get().phase).toBe('renderer.ready')
+    expect($gatewaySwitching.get()).toBe(false)
+
+    switchSessionsHeld.resolve()
+    await flushAsync()
+  })
+
   it('a cold boot warns about a Docker/SSH terminal that is not ready, not only a connection switch', async () => {
     render(<Harness />)
     await flushAsync()
@@ -2204,7 +2278,7 @@ describe('useGatewayBoot remote reconnect loop (real hook, fake socket)', () => 
     expect(desktop.getConnection).toHaveBeenCalledTimes(1)
   })
 
-  it('RETRY CONTRACT: a post-connect failure stays terminal even when its socket closes before boot catches it — a closed socket after a good dial is not a dial failure', async () => {
+  it('RETRY CONTRACT: a post-connect config failure is non-fatal — boot already completed after WS+adopt', async () => {
     const desktop = fakeDesktop()
     desktop.getConnection = vi.fn(async () => remotePrimaryConn)
     desktop.getBootProgress = vi.fn(async () => ({
@@ -2228,9 +2302,10 @@ describe('useGatewayBoot remote reconnect loop (real hook, fake socket)', () => 
     await flushAsync()
 
     expect(refreshHermesConfig).toHaveBeenCalledTimes(1)
-    expect($desktopBoot.get().error).toBeTruthy()
-    expect(desktop.getConnection).toHaveBeenCalledTimes(1)
-    await advanceBackoff()
+    // Overlay dismissed at connect+adopt; background REST must not re-fail boot.
+    expect($desktopBoot.get().error).toBeNull()
+    expect($desktopBoot.get().running).toBe(false)
+    expect($desktopBoot.get().phase).toBe('renderer.ready')
     expect(desktop.getConnection).toHaveBeenCalledTimes(1)
   })
 

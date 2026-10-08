@@ -19178,13 +19178,10 @@ app.whenReady().then(() => {
   installPreviewGuestEscapeHatch()
   installPreviewGuestPreload()
 
-  ensureWslWindowsFonts()
-  configureSpellChecker()
   registerPowerResumeListeners()
   keepAwakeMode = readPersistedKeepAwakeMode()
   applyKeepAwake()
   void minimizeToTray.start()
-  mainProcessLagWatchdog.start()
   f12Blocked = readPersistedDisableF12()
   // Seed this before the first window exists: a picker can open before
   // startHermes() finishes resolving the configured backend.
@@ -19196,7 +19193,6 @@ app.whenReady().then(() => {
   // it without the renderer visiting Settings. A failed registration is logged
   // here and surfaced in Settings via the IPC state (never silent).
   applyQuickEntrySettings(readQuickEntrySettings())
-  installCommandScreenshot({ rendererUrl: DEV_SERVER || pathToFileURL(resolveRendererIndex()).toString() })
 
   if (IS_MAC) {
     const reposition = () => wakeIndicatorController.reposition()
@@ -19208,18 +19204,24 @@ app.whenReady().then(() => {
     screen.on('display-removed', reposition)
   }
 
-
-  // A hard crash can interrupt the in-memory restore loop after exact remote
-  // serves were drained. The owner-only recovery journal survives that crash;
-  // its worker waits for the install marker to clear, then reopens every scope
-  // captured by the original transaction before removing the journal entry.
-  void resumeManagedSshRecoveries()
   installApplicationMenuAfterFirstWindow({
     isMac: IS_MAC,
     buildMenu: buildApplicationMenu,
     setApplicationMenu: menu => Menu.setApplicationMenu(menu),
     createWindow
   })
+
+  // After the first window exists: fonts, spellcheck, screenshot IPC, SSH
+  // recovery and the lag watchdog are not needed to paint or startHermes.
+  ensureWslWindowsFonts()
+  configureSpellChecker()
+  installCommandScreenshot({ rendererUrl: DEV_SERVER || pathToFileURL(resolveRendererIndex()).toString() })
+  mainProcessLagWatchdog.start()
+  // A hard crash can interrupt the in-memory restore loop after exact remote
+  // serves were drained. The owner-only recovery journal survives that crash;
+  // its worker waits for the install marker to clear, then reopens every scope
+  // captured by the original transaction before removing the journal entry.
+  void resumeManagedSshRecoveries()
 
   // Win/Linux cold start: the launching hermes:// URL is in our own argv.
   const _coldStartLink = _extractDeepLink(process.argv)
