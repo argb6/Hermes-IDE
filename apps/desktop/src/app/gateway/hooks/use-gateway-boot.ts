@@ -22,6 +22,7 @@ import {
   LIVENESS_REPROBE_DELAY_MS
 } from '@/lib/gateway-liveness-policy'
 import { resolveDesktopGatewayWsUrl } from '@/lib/gateway-ws-url'
+import { waitBackendThroughBootstrap } from '@/lib/wait-backend-through-bootstrap'
 import { BACKEND_BOOT_WAIT_TIMEOUT_MS, RECONNECT_ATTEMPT_TIMEOUT_MS, withTimeout } from '@/lib/with-timeout'
 import {
   $desktopBoot,
@@ -1462,13 +1463,15 @@ export function useGatewayBoot({
         // Full peers use the source/profile Electron pinned before loading.
         // Bounded like the reconnect path (#93454): a wedged main-process
         // round-trip must not hang "Starting Hermes…" forever. Initial boot
-        // rides out a full backend cold spawn, so it gets the shared 45s
-        // backend-boot budget, not the 20s reconnect budget.
-        const conn = await withTimeout(
-          getWindowBackend(true),
-          BACKEND_BOOT_WAIT_TIMEOUT_MS,
-          'Timed out connecting to Hermes backend'
-        )
+        // rides out a full backend cold spawn under the shared 180s budget —
+        // except while first-launch install UI is up (setup choice / install.ps1),
+        // where a hard 180s falsely reported timeout while the installer kept
+        // running. waitBackendThroughBootstrap pauses that clock until the
+        // process fails or install finishes, then re-arms for spawn/ready.
+        const conn = await waitBackendThroughBootstrap(getWindowBackend(true), desktop, {
+          timeoutMs: BACKEND_BOOT_WAIT_TIMEOUT_MS,
+          timeoutMessage: 'Timed out connecting to Hermes backend'
+        })
 
         if (cancelled) {
           return

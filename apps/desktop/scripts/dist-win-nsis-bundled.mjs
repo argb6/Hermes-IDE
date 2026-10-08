@@ -5,7 +5,7 @@
  * junction it to build/agent-payload, then package with bundled + NSIS.
  */
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -17,6 +17,8 @@ const shortOut = process.env.HERMES_PAYLOAD_OUT || 'D:\\hp'
 const shortUv = process.env.UV_CACHE_DIR || 'D:\\uvc'
 const shortCargo = process.env.CARGO_HOME || 'D:\\ch'
 const shortRustup = process.env.RUSTUP_HOME || 'D:\\rh'
+// Optional: copy a complete PM tools store so stage skips flaky network downloads.
+const toolsSeed = process.env.HERMES_TOOLS_SEED || ''
 
 function run(command, args, env = process.env) {
   console.log(`+ ${command} ${args.join(' ')}`)
@@ -37,12 +39,6 @@ if (!process.env.HERMES_PYTHON) {
 for (const dir of [shortOut, shortUv, shortCargo, shortRustup, join(desktop, 'build')]) {
   mkdirSync(dir, { recursive: true })
 }
-try {
-  execFileSync('git', ['config', '--global', 'core.longpaths', 'true'], { stdio: 'ignore' })
-} catch {
-  // Non-fatal when git is unavailable; OS LongPathsEnabled may still apply.
-}
-
 if (existsSync(link)) {
   const unlinked = spawnSync('cmd.exe', ['/d', '/c', `rmdir "${link}"`], { encoding: 'utf8' })
   if (unlinked.status !== 0 && existsSync(link)) {
@@ -52,6 +48,11 @@ if (existsSync(link)) {
 if (existsSync(shortOut)) {
   rmSync(shortOut, { recursive: true, force: true })
   mkdirSync(shortOut, { recursive: true })
+}
+if (toolsSeed && existsSync(join(toolsSeed, 'facts.json'))) {
+  const seeded = join(shortOut, 'tools')
+  console.log(`+ seed tools ${toolsSeed} -> ${seeded}`)
+  cpSync(toolsSeed, seeded, { recursive: true })
 }
 
 const env = {

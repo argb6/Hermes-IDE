@@ -4537,9 +4537,8 @@ export const en: Translations = {
     installTo: 'Will install to',
     retryAfterRun: 'I’ve run it -- retry',
     setupChoiceTitle: 'Set up Hermes Desktop',
-    setupChoiceDesc:
-      'Connect this app to a Hermes gateway you already run, or install Hermes locally on this computer.',
-    setupChoiceDescLocal: 'Install Hermes on this computer, or connect to a Hermes gateway you already run.',
+    setupChoiceDesc: 'Install Hermes locally on this computer to run the backend here.',
+    setupChoiceDescLocal: 'Use or install Hermes on this computer to run the backend here.',
     connectExistingTitle: 'Connect to existing Hermes',
     connectExistingShort: 'Connect existing',
     connectExistingDesc: 'Use a remote backend with a session token or browser sign-in. No local install will start.',

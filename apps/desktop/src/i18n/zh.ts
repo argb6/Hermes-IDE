@@ -4350,11 +4350,11 @@ export const zh = defineLocale({
     installTo: '将安装到',
     retryAfterRun: '我已运行 -- 重试',
     setupChoiceTitle: '设置 Hermes Desktop',
-    setupChoiceDesc: '将此应用连接到你已运行的 Hermes 网关，或在这台电脑上本地安装 Hermes。',
+    setupChoiceDesc: '在这台电脑上本地安装 Hermes，并在此运行后端。',
     connectExistingTitle: '连接到现有 Hermes',
     connectExistingShort: '连接现有环境',
     connectExistingDesc: '使用会话令牌或浏览器登录连接远程后端。不会启动本地安装。',
-    setupChoiceDescLocal: '在这台电脑上安装 Hermes，或连接到已在运行的 Hermes 网关。',
+    setupChoiceDescLocal: '在这台电脑上使用或安装 Hermes，并在此运行后端。',
 
     installLocalTitle: '本地安装 Hermes',
     installLocalDesc: '下载 Hermes，创建 Python 环境，并在这台电脑上运行后端。',

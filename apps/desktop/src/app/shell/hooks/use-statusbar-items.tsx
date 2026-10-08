@@ -66,6 +66,7 @@ import { $focusedRuntimeId, $focusedSessionState, $sessionTiles, isSessionRemote
 import { $statusbarHiddenIds } from '@/store/statusbar-prefs'
 import { $subagentsBySession, activeSubagentCount, failedSubagentCount } from '@/store/subagents'
 import { $gatewayRestarting } from '@/store/system-actions'
+import { $workspaceMode } from '@/store/workspace-mode'
 import {
   $backendUpdateApply,
   $backendUpdateStatus,
@@ -123,6 +124,7 @@ export function useStatusbarItems({
   const terminalShowing = useStore($paneVisible('terminal'))
   const sessionsShowing = useStore($paneVisible('sessions'))
   const profileRailVisible = useStore($profileRailVisible)
+  const workspaceMode = useStore($workspaceMode)
   const primaryBusy = useStore($busy)
   // Draft / primary composer atom — used only while the focused surface is the
   // primary (or a draft with no runtime slice yet). A focused TILE keeps its
@@ -520,15 +522,16 @@ export function useStatusbarItems({
           <AlertCircle className="size-3" />
         ),
         id: 'gateway-health',
-        // Live gateway status for Agent mode (same wording as IDE):
-        // "网关 就绪 / 连接中 / 离线 …" — not the static "后端" noun.
+        // IDE keeps the live chip; Agent mode already has gateway controls
+        // elsewhere and the "needs setup" amber label was noise on the rail/bar.
+        hidden: workspaceMode === 'agent',
         label: (
           <span className="inline-flex items-center gap-1">
             <span>{copy.gatewayTitle}</span>
             <span>{gatewayHealth.detail}</span>
           </span>
         ),
-        lockedVisible: true,
+        lockedVisible: workspaceMode !== 'agent',
         menuClassName: 'w-72',
         menuContent: gatewayMenuContent,
         // Tip only when there's a real status reason — not a restatement of the label.
@@ -675,7 +678,8 @@ export function useStatusbarItems({
       sessionsShowing,
       subagentsFailed,
       subagentsRunning,
-      toggleCommandCenter
+      toggleCommandCenter,
+      workspaceMode
     ]
   )
 
