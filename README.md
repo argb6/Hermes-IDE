@@ -1,8 +1,9 @@
-# Hermes Local
+# Hermes-IDE
 
 基于 [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) 的**私人本地化**版本，面向本机 Windows 桌面与终端使用。
 
-本仓库为私有 fork，与 Nous Research 无隶属关系。使用问题请勿向上游反馈。
+仓库：<https://github.com/argb6/Hermes-IDE>  
+本仓库为私人 fork，与 Nous Research 无隶属关系。使用问题请勿向上游反馈。
 
 - 上游：<https://github.com/NousResearch/hermes-agent>
 - 文档：<https://hermes-agent.nousresearch.com/docs/>
@@ -24,8 +25,8 @@
 ## 从源码安装
 
 ```powershell
-git clone https://github.com/argb6/hermes-local.git
-cd hermes-local
+git clone https://github.com/argb6/Hermes-IDE.git
+cd Hermes-IDE
 
 # 国内网络可先设代理（端口按你的客户端改）
 # git config --global http.proxy  http://127.0.0.1:7890
@@ -72,4 +73,24 @@ npm run dist:win:nsis
 
 ## 致谢
 
-上游项目 [Hermes Agent](https://github.com/NousResearch/hermes-agent) by [Nous Research](https://nousresearch.com)。完整能力与官方支持请使用上游仓库。
+本仓库是私人本地化 fork，**并非** Nous Research 官方产品。完整能力与官方支持请使用上游仓库。
+
+### 上游
+
+- [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) — Hermes Agent 原项目（MIT）by [Nous Research](https://nousresearch.com)
+
+### 本 fork 桌面 / IDE 借鉴与依赖（部分）
+
+布局与交互参考了常见代码编辑器产品；下列为代码或资源中有明确来源的项目：
+
+| 项目 | 用途 |
+|---|---|
+| [microsoft/vscode](https://github.com/microsoft/vscode) | IDE 布局参考（活动栏、侧栏、编辑区、底栏等） |
+| [material-extensions/vscode-material-icon-theme](https://github.com/material-extensions/vscode-material-icon-theme) | 文件树图标主题（MIT，见 `apps/desktop/src/assets/file-icons/`） |
+| [codemirror/dev](https://github.com/codemirror/dev) / CodeMirror 6 | 中间源码编辑器 |
+| [xtermjs/xterm.js](https://github.com/xtermjs/xterm.js) | 内嵌终端 |
+| [electron/electron](https://github.com/electron/electron) | 桌面壳 |
+| [assistant-ui/assistant-ui](https://github.com/assistant-ui/assistant-ui) | 对话消息 UI |
+| [cli/cli](https://github.com/cli/cli)（`gh`） | GitHub 面板通过本机 GitHub CLI 调用，不走托管 MCP |
+
+另有 Electron / React / Radix / nanostores 等常规开源依赖，详见各目录 `package.json` 与上游许可。图标、编辑器等第三方资源的版权归原作者所有；本 fork 的裁剪与打包由 **argb** 维护。

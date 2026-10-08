@@ -4470,7 +4470,7 @@ export const en: Translations = {
     versionDetailsBody: 'This install is managed outside the app. Update it the same way you installed it.',
     versionDetailsProject: 'Project',
     versionDetailsProjectBody:
-      'hermes-local: a local fork of NousResearch/hermes-agent for day-to-day Desktop IDE use and local development.',
+      'Hermes-IDE: a local fork of NousResearch/hermes-agent for day-to-day Desktop IDE use and local development.',
     versionDetailsRepository: 'Repository',
     versionDetailsBasics: 'Version',
     versionDetailsVersion: 'Version',

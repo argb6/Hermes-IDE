@@ -4457,7 +4457,7 @@ export const esOverrides = {
       'Esta instalación se administra fuera de la app. Actualízala de la misma forma en que la instalaste.',
     versionDetailsProject: 'Proyecto',
     versionDetailsProjectBody:
-      'hermes-local: fork local de NousResearch/hermes-agent para el uso diario del Desktop IDE.',
+      'Hermes-IDE: fork local de NousResearch/hermes-agent para el uso diario del Desktop IDE.',
     versionDetailsRepository: 'Repositorio',
     versionDetailsBasics: 'Versión',
     versionDetailsVersion: 'Versión',

@@ -4463,7 +4463,7 @@ export const deOverrides = {
       'Diese Installation wird außerhalb der App verwaltet. Aktualisieren Sie sie auf dieselbe Weise, wie Sie sie installiert haben.',
     versionDetailsProject: 'Projekt',
     versionDetailsProjectBody:
-      'hermes-local: lokaler Fork von NousResearch/hermes-agent für den Desktop-IDE-Alltag.',
+      'Hermes-IDE: lokaler Fork von NousResearch/hermes-agent für den Desktop-IDE-Alltag.',
     versionDetailsRepository: 'Repository',
     versionDetailsBasics: 'Version',
     versionDetailsVersion: 'Version',

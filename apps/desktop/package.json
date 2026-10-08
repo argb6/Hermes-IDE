@@ -3,11 +3,11 @@
   "productName": "Hermes",
   "private": true,
   "version": "0.0.0",
-  "description": "Native desktop shell for Hermes Agent.",
-  "author": "Nous Research",
+  "description": "Hermes-IDE desktop shell (private fork of Hermes Agent).",
+  "author": "argb",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/NousResearch/hermes-agent.git"
+    "url": "git+https://github.com/argb6/Hermes-IDE.git"
   },
   "type": "module",
   "main": "dist/electron-main.mjs",

@@ -112,7 +112,7 @@ export const arBoot = {
     versionDetailsBody: 'هذا التثبيت مُدار خارج التطبيق. حدّثه بالطريقة نفسها التي استخدمتها لتثبيته.',
     versionDetailsProject: 'المشروع',
     versionDetailsProjectBody:
-      'hermes-local: فرع محلي من NousResearch/hermes-agent لاستخدام Desktop IDE يومياً.',
+      'Hermes-IDE: فرع محلي من NousResearch/hermes-agent لاستخدام Desktop IDE يومياً.',
     versionDetailsRepository: 'المستودع',
     versionDetailsBasics: 'الإصدار',
     versionDetailsVersion: 'الإصدار',

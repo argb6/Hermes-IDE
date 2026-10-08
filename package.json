@@ -25,15 +25,16 @@
     "check": "npm run --ws check",
     "fix": "npm run --ws fix"
   },
+  "author": "argb",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/NousResearch/Hermes-Agent.git"
+    "url": "git+https://github.com/argb6/Hermes-IDE.git"
   },
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/NousResearch/Hermes-Agent/issues"
+    "url": "https://github.com/argb6/Hermes-IDE/issues"
   },
-  "homepage": "https://github.com/NousResearch/Hermes-Agent#readme",
+  "homepage": "https://github.com/argb6/Hermes-IDE#readme",
   "devDependencies": {
     "@eslint/js": "9.39.5",
     "eslint-plugin-perfectionist": "5.10.0",

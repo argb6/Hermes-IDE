@@ -110,7 +110,7 @@ describe('VersionDetails', () => {
     }
   })
 
-  it('shows the hermes-local fork notice and repository', (): void => {
+  it('shows the Hermes-IDE fork notice and repository', (): void => {
     render(
       <I18nProvider configClient={null} initialLocale="en">
         <VersionDetails version={baseVersion} />
@@ -119,10 +119,10 @@ describe('VersionDetails', () => {
 
     expect(
       screen.getByText(
-        'hermes-local: a local fork of NousResearch/hermes-agent for day-to-day Desktop IDE use and local development.'
+        'Hermes-IDE: a local fork of NousResearch/hermes-agent for day-to-day Desktop IDE use and local development.'
       )
     ).toBeTruthy()
-    expect(screen.getByText('argb6/hermes-local')).toBeTruthy()
+    expect(screen.getByText('argb6/Hermes-IDE')).toBeTruthy()
   })
 
   it('opens the commit URL via the system-browser bridge without opening a preview tab', async () => {

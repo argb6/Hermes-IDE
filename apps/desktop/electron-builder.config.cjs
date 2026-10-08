@@ -37,7 +37,7 @@ const {
 /** @type {NonNullable<typeof storeMsix> | undefined} */
 const storeMsixWhenStore = storeMsix
 const releaseBuild = Boolean(process.env.HERMES_PAYLOAD_TAG)
-/** Local hermes-local Windows installer with a choosable path (NSIS). Default remains MSIX. */
+/** Local Hermes-IDE Windows installer with a choosable path (NSIS). Default remains MSIX. */
 const winNsis = process.env.HERMES_DESKTOP_WIN_TARGET === 'nsis'
 
 /**
@@ -59,7 +59,7 @@ const channelRequest = channelBuildRequest()
 
 /** @typedef {import("app-builder-lib").Configuration} Configuration */
 
-const [owner, repo] = (process.env.GITHUB_REPOSITORY || 'NousResearch/hermes-agent').split('/')
+const [owner, repo] = (process.env.GITHUB_REPOSITORY || 'argb6/Hermes-IDE').split('/')
 if (!owner || !repo) {
   throw new Error(`invalid GITHUB_REPOSITORY ${process.env.GITHUB_REPOSITORY}`)
 }
@@ -77,6 +77,8 @@ module.exports = {
   appId,
   productName: displayName,
   executableName: displayName,
+  // NSIS / PE version resources (CompanyName from package.json author, LegalCopyright here).
+  copyright: 'Copyright © 2026 argb',
   protocols: [
     {
       name: `${displayName} Protocol`,
@@ -243,7 +245,7 @@ module.exports = {
     extraResources: [{ from: 'scripts/update-relaunch-waiter.ps1', to: 'update-relaunch-waiter.ps1' }],
     ...windowsSigning()
   },
-  // hermes-local assisted installer: pick a folder, warn that it will be wiped,
+  // Hermes-IDE assisted installer: pick a folder, warn that it will be wiped,
   // then clear that directory before files are extracted (see assets/installer-wipe-dir.nsh).
   nsis: {
     oneClick: false,
@@ -267,7 +269,7 @@ module.exports = {
     applicationId: appNamePascal,
     displayName,
     publisher: store ? mustStoreMsix(storeMsixWhenStore).publisher : OUT_OF_STORE_PUBLISHER,
-    publisherDisplayName: store ? mustStoreMsix(storeMsixWhenStore).publisherDisplayName : 'Nous Research',
+    publisherDisplayName: store ? mustStoreMsix(storeMsixWhenStore).publisherDisplayName : 'argb',
     // The native quad is the build time (scripts/msix-shared.mjs::nativeQuad),
     // baked into the manifest template, so the builder's own build-number
     // override would stamp a second, conflicting version.
@@ -297,10 +299,10 @@ module.exports = {
   },
   linux: {
     category: 'Development',
-    maintainer: 'Nous Research <support@nousresearch.com>',
+    maintainer: 'argb',
     synopsis: light
-      ? 'Remote-only desktop client for Hermes Agent.'
-      : 'Native desktop shell for Hermes Agent.',
+      ? 'Remote-only Hermes-IDE desktop client.'
+      : 'Hermes-IDE desktop shell (private Hermes Agent fork).',
     target: ['AppImage']
   }
 }

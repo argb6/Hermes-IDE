@@ -4294,7 +4294,7 @@ export const zh = defineLocale({
     versionDetailsBody: '此安装在应用外部管理。请使用与安装时相同的方式更新。',
     versionDetailsProject: '项目',
     versionDetailsProjectBody:
-      'hermes-local：NousResearch/hermes-agent 的本地 fork，面向本机 Desktop IDE 日常使用与二次开发。',
+      'Hermes-IDE：NousResearch/hermes-agent 的本地 fork，面向本机 Desktop IDE 日常使用与二次开发。',
     versionDetailsRepository: '本仓库',
     versionDetailsBasics: '版本信息',
     versionDetailsVersion: '版本',

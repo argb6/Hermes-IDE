@@ -6,9 +6,9 @@ import { distributionLabelKey } from '@/lib/distribution-label'
 import { ExternalLink } from '@/lib/external-link'
 import { shortVersion } from '@/lib/version-label'
 
-/** Local hermes-local fork — About page points at this repo, not upstream. */
-export const HERMES_LOCAL_REPO_URL = 'https://github.com/argb6/hermes-local'
-export const HERMES_LOCAL_REPO_LABEL = 'argb6/hermes-local'
+/** Hermes-IDE fork — About page points at this repo, not upstream. */
+export const HERMES_LOCAL_REPO_URL = 'https://github.com/argb6/Hermes-IDE'
+export const HERMES_LOCAL_REPO_LABEL = 'argb6/Hermes-IDE'
 
 /**
  * Human label for an external build's runtime source: the resolution rung
@@ -42,7 +42,7 @@ function DetailRow({ label, children }: { label: string; children: ReactNode }) 
  * same version, branch, commit, distribution, runtime, and install id
  * from one source of truth.
  *
- * hermes-local About layout (three boxes):
+ * Hermes-IDE About layout (three boxes):
  * 1. Fork project notice
  * 2. This fork's repository
  * 3. Version / build basics
