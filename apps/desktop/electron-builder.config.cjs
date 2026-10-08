@@ -37,6 +37,8 @@ const {
 /** @type {NonNullable<typeof storeMsix> | undefined} */
 const storeMsixWhenStore = storeMsix
 const releaseBuild = Boolean(process.env.HERMES_PAYLOAD_TAG)
+/** Local hermes-local Windows installer with a choosable path (NSIS). Default remains MSIX. */
+const winNsis = process.env.HERMES_DESKTOP_WIN_TARGET === 'nsis'
 
 /**
  * The store MSIX packaging identity. Callers must only invoke this when
@@ -234,12 +236,28 @@ module.exports = {
   win: {
     executableName: windowsExecutableName,
     legalTrademarks: displayName,
-    target: ['msix'],
+    target: winNsis ? ['nsis'] : ['msix'],
     // The updaters' relaunch waiter is PowerShell run outside the package. The
     // sealed payload's snapshot omits scripts/, so it ships as a resource
     // (RELAUNCH_WAITER_SCRIPT in electron/updater/relaunch-waiter.ts).
     extraResources: [{ from: 'scripts/update-relaunch-waiter.ps1', to: 'update-relaunch-waiter.ps1' }],
     ...windowsSigning()
+  },
+  // hermes-local assisted installer: pick a folder, warn that it will be wiped,
+  // then clear that directory before files are extracted (see assets/installer-wipe-dir.nsh).
+  nsis: {
+    oneClick: false,
+    perMachine: false,
+    allowElevation: true,
+    allowToChangeInstallationDirectory: true,
+    createDesktopShortcut: true,
+    createStartMenuShortcut: true,
+    shortcutName: displayName,
+    include: 'assets/installer-wipe-dir.nsh',
+    installerLanguages: ['zh_CN', 'en_US'],
+    deleteAppDataOnUninstall: false,
+    runAfterFinish: true,
+    menuCategory: false
   },
   msix: {
     // A store build uses the Partner Center packaging identity (the Store
