@@ -2933,6 +2933,7 @@ export const ja = defineLocale({
       stage: 'ステージ',
       unstage: 'ステージ解除',
       stageAll: 'すべてステージ',
+      unstageAll: 'すべてステージ解除',
       viewAsTree: 'ツリー表示',
       viewAsList: 'リスト表示',
       revert: '取り消し',

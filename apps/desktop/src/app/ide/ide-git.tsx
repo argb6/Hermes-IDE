@@ -228,7 +228,7 @@ export function IdeGit({
       <div className="min-h-0 flex-1 overflow-auto pt-2">
         <IdeDisclosure count={files.length} onToggle={() => setChangesOpen(open => !open)} open={changesOpen} title={t.ide.changesPane}>
           {files.length > 0 && (
-            <div className="flex items-center justify-end gap-1 px-3 pb-1">
+            <div className="flex items-center justify-end gap-2 px-3 pb-1">
               <button
                 className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-40"
                 disabled={busy}
@@ -236,6 +236,14 @@ export function IdeGit({
                 type="button"
               >
                 {t.ide.stageAll}
+              </button>
+              <button
+                className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-40"
+                disabled={busy || !files.some(file => file.staged)}
+                onClick={() => void runReview('unstage')}
+                type="button"
+              >
+                {t.ide.unstageAll}
               </button>
             </div>
           )}

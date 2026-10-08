@@ -298,10 +298,32 @@ def _classify_resolved_write_denial(homes: set[str], resolved: str) -> Optional[
                     return "credential"
 
     safe_roots = get_safe_write_roots()
-    if safe_roots and not any(_is_under(resolved, root) for root in safe_roots):
+    if (
+        safe_roots
+        and not any(_is_under(resolved, root) for root in safe_roots)
+        and not _is_agent_managed_hermes_content(resolved)
+    ):
         return "safe_root"
 
     return None
+
+
+# User-editable agent content under HERMES_HOME. When HERMES_WRITE_SAFE_ROOT
+# pins writes to a project workspace (Desktop / sandbox), these dirs must stay
+# writable so the agent can maintain skills and plugins without widening the
+# whole home. ``skills/.hub`` stays read-denied elsewhere and is not listed here.
+_AGENT_MANAGED_HERMES_SUBDIRS = ("skills", "plugins", "desktop-plugins", "optional-skills")
+
+
+def _is_agent_managed_hermes_content(resolved: str) -> bool:
+    """True when ``resolved`` is under a HERMES_HOME skills/plugins tree."""
+    for base in _hermes_dirs():
+        for sub in _AGENT_MANAGED_HERMES_SUBDIRS:
+            with suppress(Exception):
+                root = os.path.realpath(os.path.join(str(base), sub))
+                if _is_under(resolved, root):
+                    return True
+    return False
 
 
 def is_write_denied(path: str) -> bool:

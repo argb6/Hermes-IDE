@@ -4420,6 +4420,7 @@ export const frOverrides = {
       stage: 'Mettre en zone de préparation',
       unstage: 'Retirer de la zone de préparation',
       stageAll: 'Tout mettre en zone de préparation',
+      unstageAll: 'Tout retirer de la zone de préparation',
       viewAsTree: 'Voir en arbre',
       viewAsList: 'Voir en liste',
       revert: 'Rétablir',

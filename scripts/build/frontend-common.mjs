@@ -34,7 +34,22 @@ const productOwner = 'hermes-frontend-product-v1\n'
 const developerOutputs = ['ui-tui/dist', 'hermes_cli/web_dist', 'apps/desktop/dist', 'apps/desktop/build/native-deps']
 
 function developerOutput(source, out) {
-  return source && developerOutputs.some(name => path.resolve(out) === path.join(path.resolve(source), name))
+  if (!source) return false
+  const resolved = path.resolve(out)
+  const root = path.resolve(source)
+  return developerOutputs.some(name => {
+    const allowed = path.join(root, name)
+    if (resolved === allowed) return true
+    // run-electron-builder stages per-target caches as native-deps-<platform>-<arch>.
+    if (
+      name === 'apps/desktop/build/native-deps' &&
+      path.dirname(resolved) === path.dirname(allowed) &&
+      /^native-deps-[a-z0-9]+-[a-z0-9]+$/i.test(path.basename(resolved))
+    ) {
+      return true
+    }
+    return false
+  })
 }
 
 // A destination name alone does not confer ownership of its existing contents.

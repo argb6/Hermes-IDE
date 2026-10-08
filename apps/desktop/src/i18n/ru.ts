@@ -3129,6 +3129,7 @@ export const ru = defineLocale({
       stage: 'Добавить в индекс',
       unstage: 'Убрать из индекса',
       stageAll: 'Добавить всё в индекс',
+      unstageAll: 'Убрать всё из индекса',
       viewAsTree: 'Вид деревом',
       viewAsList: 'Вид списком',
       revert: 'Отменить',

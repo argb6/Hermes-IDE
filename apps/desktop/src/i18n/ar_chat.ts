@@ -313,6 +313,7 @@ export const arChat = {
       stage: 'إدراج',
       unstage: 'إلغاء الإدراج',
       stageAll: 'إدراج الكل',
+      unstageAll: 'إلغاء إدراج الكل',
       viewAsTree: 'عرض كشجرة',
       viewAsList: 'عرض كقائمة',
       revert: 'تراجع',

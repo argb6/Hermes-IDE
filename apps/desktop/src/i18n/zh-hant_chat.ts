@@ -336,6 +336,7 @@ export const zhHantChat = {
       stage: '暫存',
       unstage: '取消暫存',
       stageAll: '全部暫存',
+      unstageAll: '全部取消暫存',
       viewAsTree: '樹狀檢視',
       viewAsList: '清單檢視',
       revert: '還原',

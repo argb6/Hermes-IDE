@@ -119,6 +119,18 @@ export function ReviewPane({ embedded = false }: { embedded?: boolean }) {
               <Codicon name="add" size="0.8125rem" />
             </Button>
           </Tip>
+          <Tip label={c.unstageAll}>
+            <Button
+              aria-label={c.unstageAll}
+              className={ACTION_BTN}
+              disabled={!hasFiles || !isUncommitted}
+              onClick={() => void unstageReviewFile(null).catch(err => notifyError(err, c.unstageAll))}
+              size="icon-xs"
+              variant="ghost"
+            >
+              <Codicon name="remove" size="0.8125rem" />
+            </Button>
+          </Tip>
           <Tip label={c.revertAll}>
             <Button
               aria-label={c.revertAll}

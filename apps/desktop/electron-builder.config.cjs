@@ -78,7 +78,7 @@ module.exports = {
   productName: displayName,
   executableName: displayName,
   // NSIS / PE version resources (CompanyName from package.json author, LegalCopyright here).
-  copyright: 'Copyright © 2026 argb',
+  copyright: 'Copyright © 2026',
   protocols: [
     {
       name: `${displayName} Protocol`,
@@ -88,7 +88,10 @@ module.exports = {
   // A store build is archived, never served to a feed — prefix its artifact
   // so it can't collide with the out-of-store MSIX of the same tag/arch, and
   // the release pipeline can keep the two apart.
-  artifactName: `${store ? 'Store-' : ''}${artifactNamePascal}-\${version}-\${os}-\${arch}.\${ext}`,
+  // Local Windows NSIS: marketing name "Hermes-IDE windows ×86" (amd64 / x64).
+  artifactName: winNsis
+    ? 'Hermes-IDE windows ×86-${version}.${ext}'
+    : `${store ? 'Store-' : ''}${artifactNamePascal}-\${version}-\${os}-\${arch}.\${ext}`,
   icon: 'assets/icon',
   // The electron-updater feed. CI builds set CLOUDFLARE_R2_PUBLIC_URL (the R2
   // public bucket / custom domain) and publish there — the feed yml, blockmaps
@@ -97,7 +100,9 @@ module.exports = {
   // var (local, or a fork without the R2 vars) keep the github provider, which
   // is exactly today's behavior. The store build has no feed at all (the Store
   // owns its distribution and updates).
-  publish: channelRequest ? null : !channel
+  // Local NSIS builds are never published; keep publish null so missing GH_TOKEN
+  // cannot fail the run after the installer is already written.
+  publish: winNsis || channelRequest || !channel
     ? null
     : [
         publicUrl
@@ -245,11 +250,7 @@ module.exports = {
     extraResources: [{ from: 'scripts/update-relaunch-waiter.ps1', to: 'update-relaunch-waiter.ps1' }],
     ...windowsSigning()
   },
-  // Hermes-IDE assisted installer: pick a folder. Setup nests an app-named
-  // subfolder when needed, refuses drive roots and common user/system
-  // directories, and aborts if that folder is not empty (an /updated upgrade
-  // may reuse it). It never deletes existing files
-  // (see assets/installer-wipe-dir.nsh).
+  // Hermes-IDE assisted installer: pick an install directory (standard NSIS).
   nsis: {
     oneClick: false,
     perMachine: false,
@@ -258,7 +259,6 @@ module.exports = {
     createDesktopShortcut: true,
     createStartMenuShortcut: true,
     shortcutName: displayName,
-    include: 'assets/installer-wipe-dir.nsh',
     installerLanguages: ['zh_CN', 'en_US'],
     deleteAppDataOnUninstall: false,
     runAfterFinish: true,
@@ -272,7 +272,7 @@ module.exports = {
     applicationId: appNamePascal,
     displayName,
     publisher: store ? mustStoreMsix(storeMsixWhenStore).publisher : OUT_OF_STORE_PUBLISHER,
-    publisherDisplayName: store ? mustStoreMsix(storeMsixWhenStore).publisherDisplayName : 'argb',
+    publisherDisplayName: store ? mustStoreMsix(storeMsixWhenStore).publisherDisplayName : 'Hermes-IDE',
     // The native quad is the build time (scripts/msix-shared.mjs::nativeQuad),
     // baked into the manifest template, so the builder's own build-number
     // override would stamp a second, conflicting version.
@@ -302,7 +302,7 @@ module.exports = {
   },
   linux: {
     category: 'Development',
-    maintainer: 'argb',
+    maintainer: 'Hermes-IDE',
     synopsis: light
       ? 'Remote-only Hermes-IDE desktop client.'
       : 'Hermes-IDE desktop shell (private Hermes Agent fork).',

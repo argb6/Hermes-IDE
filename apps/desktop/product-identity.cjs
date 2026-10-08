@@ -9,7 +9,7 @@
 'use strict'
 
 const variants = {
-  '': { display: 'Hermes', kebab: 'hermes', pascal: 'Hermes' },
+  '': { display: 'Hermes-IDE', kebab: 'hermes', pascal: 'Hermes' },
   light: {
     display: 'Hermes Light',
     kebab: 'hermes-light',
@@ -67,23 +67,23 @@ const identity = {
   light,
   displayName,
   // Hermes-IDE packaging identity — not Nous Research / official Hermes.
-  appId: `com.argb.${name.kebab}${kebabSuffix}`,
+  appId: `com.hermeside.${name.kebab}${kebabSuffix}`,
   // Store and commit builds do not publish a release feed.
   channel: store || buildCommit ? null : light ? (canary ? 'light-canary' : 'light') : (canary ? 'canary' : 'latest'),
   appNamePascal: `${name.pascal}${pascalSuffix}`,
   artifactNamePascal: name.pascal,
   windowsExecutableName: kebabSuffix ? cliName : displayName,
   cliName,
-  msixAppIdWithOrg: `argb.${name.pascal}${pascalSuffix}`,
+  msixAppIdWithOrg: `HermesIDE.${name.pascal}${pascalSuffix}`,
   ...(store
     ? {
         storeMsix: {
           // Partner Center publisher identity (the account's publisher ID) —
           // validated + re-signed by the Store on submission.
           // Hermes-IDE does not ship Store builds; keep a non-official label.
-          identityName: 'argb.HermesAgent',
-          publisher: 'CN=argb',
-          publisherDisplayName: 'argb'
+          identityName: 'HermesIDE.HermesAgent',
+          publisher: 'CN=HermesIDE',
+          publisherDisplayName: 'Hermes-IDE'
         }
       }
     : {})

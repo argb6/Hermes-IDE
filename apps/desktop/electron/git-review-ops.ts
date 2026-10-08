@@ -11,6 +11,13 @@ import path from 'node:path'
 import simpleGit from 'simple-git'
 
 import { resolveRequestedPathForIpc } from './hardening'
+import {
+  githubCheckoutPr,
+  githubPrChecks,
+  githubPrFiles,
+  githubSidebar,
+  githubStartIssue
+} from './git-github-ops'
 import { execGit, noConsoleGitEnv, simpleGitBinary, windowsGitHost } from './no-console-git'
 
 const COMMIT_CONTEXT_DIFF_MAX_CHARS = 120_000
@@ -890,116 +897,6 @@ async function repoStatus(repoPath, gitBin) {
   return result
 }
 
-const GITHUB_LIST_LIMIT = '30'
-
-function githubLogin(node) {
-  return node && typeof node.login === 'string' ? node.login : ''
-}
-
-function githubLogins(nodes) {
-  return Array.isArray(nodes) ? nodes.map(githubLogin).filter(Boolean) : []
-}
-
-function githubRows(raw) {
-  if (!raw.ok) {
-    return []
-  }
-
-  try {
-    const parsed = JSON.parse(raw.stdout)
-
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
-
-// Open PRs and issues for the IDE GitHub side bar. One `gh` list each, capped,
-// so the pane does not page through a busy repo.
-async function githubSidebar(repoPath, ghBin) {
-  let cwd
-
-  try {
-    cwd = resolveRequestedPathForIpc(repoPath, { purpose: 'GitHub sidebar' })
-  } catch {
-    return { prs: [], issues: [] }
-  }
-
-  const [prRaw, issueRaw] = await Promise.all([
-    runGh(
-      ['pr', 'list', '--state', 'open', '--limit', GITHUB_LIST_LIMIT, '--json', 'number,title,url,isDraft,author,reviewRequests,headRefName'],
-      cwd,
-      ghBin
-    ),
-    runGh(
-      ['issue', 'list', '--state', 'open', '--limit', GITHUB_LIST_LIMIT, '--json', 'number,title,url,author,assignees'],
-      cwd,
-      ghBin
-    )
-  ])
-
-  return {
-    prs: githubRows(prRaw).map(pr => ({
-      number: Number(pr.number) || 0,
-      title: String(pr.title || ''),
-      url: String(pr.url || ''),
-      draft: Boolean(pr.isDraft),
-      author: githubLogin(pr.author),
-      branch: String(pr.headRefName || ''),
-      reviewers: githubLogins(pr.reviewRequests)
-    })),
-    issues: githubRows(issueRaw).map(issue => ({
-      number: Number(issue.number) || 0,
-      title: String(issue.title || ''),
-      url: String(issue.url || ''),
-      author: githubLogin(issue.author),
-      assignees: githubLogins(issue.assignees)
-    }))
-  }
-}
-
-const PR_FILE_MARK = { ADDED: 'A', COPIED: 'R', DELETED: 'D', RENAMED: 'R' }
-
-// Files touched by one open PR, for the expanded row. Reads only.
-async function githubPrFiles(repoPath, number, ghBin) {
-  const pr = Number(number)
-
-  if (!Number.isInteger(pr) || pr <= 0) {
-    return { files: [] }
-  }
-
-  let cwd
-
-  try {
-    cwd = resolveRequestedPathForIpc(repoPath, { purpose: 'GitHub PR files' })
-  } catch {
-    return { files: [] }
-  }
-
-  const raw = await runGh(['pr', 'view', String(pr), '--json', 'files'], cwd, ghBin)
-
-  if (!raw.ok) {
-    return { files: [] }
-  }
-
-  try {
-    const files = JSON.parse(raw.stdout)?.files
-
-    if (!Array.isArray(files)) {
-      return { files: [] }
-    }
-
-    return {
-      files: files.map(file => ({
-        path: String(file.path || ''),
-        mark: PR_FILE_MARK[file.changeType] || 'M'
-      }))
-    }
-  } catch {
-    return { files: [] }
-  }
-}
-
 const REPO_LOG_LIMIT = 40
 const FILE_HISTORY_LIMIT = 30
 const FILE_REV = /^[0-9a-f]{4,40}$/i
@@ -1117,8 +1014,11 @@ export {
   repoStatus,
   resolveRenamePath,
   REVIEW_FILE_CAP,
+  githubCheckoutPr,
+  githubPrChecks,
   githubPrFiles,
   githubSidebar,
+  githubStartIssue,
   reviewCommit,
   reviewCommitContext,
   reviewCreatePr,

@@ -128,6 +128,12 @@ const remoteGit: GitBridge = {
   githubPrFiles: (repoPath, number) =>
     gitGet<{ files: HermesGithubPrFile[] }>('github/pr-files', { number: String(number), path: repoPath }),
 
+  githubCheckoutPr: async () => ({ ok: false, message: 'Checkout needs the desktop app.' }),
+
+  githubStartIssue: async () => ({ ok: false, message: 'Start-from-issue needs the desktop app.' }),
+
+  githubPrChecks: async () => ({ checks: [] }),
+
   // Repo discovery is a local-disk crawl; on a remote gateway the backend
   // already merges session-derived repos, so this is a no-op.
   scanRepos: async () => []

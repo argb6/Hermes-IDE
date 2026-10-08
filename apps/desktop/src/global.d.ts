@@ -518,6 +518,9 @@ declare global {
         // Open PRs and issues for the IDE GitHub side bar.
         githubSidebar: (repoPath: string) => Promise<HermesGithubSidebar>
         githubPrFiles: (repoPath: string, number: number) => Promise<{ files: HermesGithubPrFile[] }>
+        githubCheckoutPr: (repoPath: string, number: number) => Promise<HermesGithubActionResult>
+        githubStartIssue: (repoPath: string, number: number) => Promise<HermesGithubActionResult>
+        githubPrChecks: (repoPath: string, number: number) => Promise<{ checks: HermesGithubCheck[] }>
         // Repo-first discovery: scan bounded roots for git repos (depth-capped).
         scanRepos: (
           roots: string[],
@@ -1637,6 +1640,20 @@ export interface HermesGithubPr {
   author: string
   branch: string
   reviewers: string[]
+  /** Aggregated CI from `statusCheckRollup`: pass | fail | pending | none */
+  checkState?: 'fail' | 'none' | 'pass' | 'pending'
+  checkDetail?: string
+}
+
+export interface HermesGithubCheck {
+  name: string
+  state: string
+  link: string
+}
+
+export interface HermesGithubActionResult {
+  ok: boolean
+  message: string
 }
 
 export interface HermesGithubIssue {

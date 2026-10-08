@@ -4400,6 +4400,7 @@ export const esOverrides = {
       stage: 'Preparar',
       unstage: 'Quitar de preparación',
       stageAll: 'Preparar todo',
+      unstageAll: 'Quitar todo de preparación',
       viewAsTree: 'Ver como árbol',
       viewAsList: 'Ver como lista',
       revert: 'Revertir',

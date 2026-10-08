@@ -474,12 +474,16 @@ function ProjectTreeRow({
             {node.data.name}
           </span>
           {markColor && (
-            <span className="ml-auto flex w-4 shrink-0 items-center justify-end text-xs font-medium" style={{ color: markColor }}>
-              {isFolder ? (
-                <span aria-hidden style={{ background: markColor, borderRadius: 999, display: 'block', height: 6, width: 6 }} />
-              ) : (
-                change?.mark
-              )}
+            <span
+              className="ml-auto flex w-4 shrink-0 items-center justify-end text-xs font-medium"
+              style={{ color: markColor }}
+              title={
+                isFolder && folderChange
+                  ? `${folderChange.change.mark} · ${folderChange.count}`
+                  : change?.mark
+              }
+            >
+              {isFolder ? folderChange?.change.mark : change?.mark}
             </span>
           )}
         </>

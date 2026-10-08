@@ -7,8 +7,11 @@ import { getGhAuthStatus } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { desktopGit } from '@/lib/desktop-git'
 import { cn } from '@/lib/utils'
+import { refreshRepoStatus } from '@/store/coding-status'
+import { notifyError } from '@/store/notifications'
 
 import { IdeDisclosure } from './ide-disclosure'
+import { appendIdeOutput } from './ide-output'
 
 export const GITHUB_LOGIN_COMMAND = [
   '$g = $null',
@@ -48,6 +51,7 @@ export function IdeGithub({
 }) {
   const { t } = useI18n()
   const [ready, setReady] = useState<boolean | null>(null)
+  const [ghAvailable, setGhAvailable] = useState(true)
   const [account, setAccount] = useState('')
   const [sidebar, setSidebar] = useState<HermesGithubSidebar>(EMPTY_SIDEBAR)
   const [localBranches, setLocalBranches] = useState<string[]>([])
@@ -69,6 +73,7 @@ export function IdeGithub({
 
           const signedIn = status.available && status.authenticated
 
+          setGhAvailable(Boolean(status.available))
           setReady(signedIn)
           setAccount(status.account || '')
 
@@ -78,6 +83,7 @@ export function IdeGithub({
         })
         .catch(() => {
           if (!cancelled) {
+            setGhAvailable(false)
             setReady(false)
             timer = window.setTimeout(pull, 4000)
           }
@@ -220,14 +226,64 @@ export function IdeGithub({
       .catch(() => setPrFiles(current => ({ ...current, [pr.number]: [] })))
   }
 
+  const runCheckout = async (pr: HermesGithubPr) => {
+    if (!cwd || busy) {
+      return
+    }
+
+    setBusy(t.ide.githubActionBusy)
+
+    try {
+      const result = await desktopGit()?.githubCheckoutPr(cwd, pr.number)
+      appendIdeOutput(result?.message || '')
+      if (!result?.ok) {
+        notifyError(new Error(result?.message || t.ide.githubActionFailed), t.ide.githubActionFailed)
+      } else {
+        void refreshRepoStatus(cwd)
+      }
+    } catch (error) {
+      notifyError(error, t.ide.githubActionFailed)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const runStartIssue = async (issue: HermesGithubIssue) => {
+    if (!cwd || busy) {
+      return
+    }
+
+    setBusy(t.ide.githubActionBusy)
+
+    try {
+      const result = await desktopGit()?.githubStartIssue(cwd, issue.number)
+      appendIdeOutput(result?.message || '')
+      if (!result?.ok) {
+        notifyError(new Error(result?.message || t.ide.githubActionFailed), t.ide.githubActionFailed)
+      } else {
+        void refreshRepoStatus(cwd)
+      }
+    } catch (error) {
+      notifyError(error, t.ide.githubActionFailed)
+    } finally {
+      setBusy('')
+    }
+  }
+
   if (!ready) {
     return (
-      <div className="flex h-full flex-col gap-2 p-3">
-        <p className="text-xs text-muted-foreground">{t.ide.githubNeedAuth}</p>
-        <p className="text-xs text-muted-foreground">{t.ide.githubLoginHint}</p>
-        <Button onClick={onLogin} size="sm" variant="secondary">
-          {t.ide.githubLogin}
-        </Button>
+      <div className="flex h-full flex-col gap-3 p-3">
+        <p className="text-xs text-foreground">{t.ide.githubNeedAuth}</p>
+        <p className="text-xs text-muted-foreground">{ghAvailable ? t.ide.githubLoginHint : t.ide.githubNeedInstall}</p>
+        <p className="text-[11px] leading-relaxed text-muted-foreground">{t.ide.githubLoginSteps}</p>
+        <div className="flex flex-wrap gap-1">
+          <Button onClick={onLogin} size="sm" variant="secondary">
+            {t.ide.githubLogin}
+          </Button>
+          <Button onClick={() => openUrl('https://cli.github.com/')} size="sm" variant="ghost">
+            {t.ide.githubDocs}
+          </Button>
+        </div>
       </div>
     )
   }
@@ -269,10 +325,12 @@ export function IdeGithub({
         title={t.ide.githubWaiting}
       >
         <PrList
+          busy={Boolean(busy)}
           cwd={cwd}
           empty={t.ide.githubNone}
           expanded={expanded}
           files={prFiles}
+          onCheckout={runCheckout}
           onComment={commentPr}
           onOpen={onOpen}
           onOpenDoc={openPrDoc}
@@ -287,10 +345,12 @@ export function IdeGithub({
         title={t.ide.githubCreated}
       >
         <PrList
+          busy={Boolean(busy)}
           cwd={cwd}
           empty={t.ide.githubNone}
           expanded={expanded}
           files={prFiles}
+          onCheckout={runCheckout}
           onComment={commentPr}
           onOpen={onOpen}
           onOpenDoc={openPrDoc}
@@ -305,10 +365,12 @@ export function IdeGithub({
         title={t.ide.githubAllOpen}
       >
         <PrList
+          busy={Boolean(busy)}
           cwd={cwd}
           empty={t.ide.githubNone}
           expanded={expanded}
           files={prFiles}
+          onCheckout={runCheckout}
           onComment={commentPr}
           onOpen={onOpen}
           onOpenDoc={openPrDoc}
@@ -323,7 +385,14 @@ export function IdeGithub({
         open={open.mine}
         title={t.ide.githubMyIssues}
       >
-        <IssueList empty={t.ide.githubNone} issues={myIssues} onOpenDoc={onOpenDoc} />
+        <IssueList
+          busy={Boolean(busy)}
+          cwd={cwd}
+          empty={t.ide.githubNone}
+          issues={myIssues}
+          onOpenDoc={onOpenDoc}
+          onStart={runStartIssue}
+        />
       </IdeDisclosure>
       <IdeDisclosure
         count={createdIssues.length}
@@ -331,7 +400,14 @@ export function IdeGithub({
         open={open.issues}
         title={t.ide.githubCreatedIssues}
       >
-        <IssueList empty={t.ide.githubNone} issues={createdIssues} onOpenDoc={onOpenDoc} />
+        <IssueList
+          busy={Boolean(busy)}
+          cwd={cwd}
+          empty={t.ide.githubNone}
+          issues={createdIssues}
+          onOpenDoc={onOpenDoc}
+          onStart={runStartIssue}
+        />
       </IdeDisclosure>
       <IdeDisclosure
         count={sidebar.issues.length}
@@ -339,28 +415,39 @@ export function IdeGithub({
         open={open.recent}
         title={t.ide.githubRecentIssues}
       >
-        <IssueList empty={t.ide.githubNone} issues={sidebar.issues} onOpenDoc={onOpenDoc} />
+        <IssueList
+          busy={Boolean(busy)}
+          cwd={cwd}
+          empty={t.ide.githubNone}
+          issues={sidebar.issues}
+          onOpenDoc={onOpenDoc}
+          onStart={runStartIssue}
+        />
       </IdeDisclosure>
     </div>
   )
 }
 
 function PrList({
+  busy,
   cwd,
   empty,
   expanded,
   files,
   prs,
+  onCheckout,
   onComment,
   onOpen,
   onOpenDoc,
   onToggle
 }: {
+  busy: boolean
   cwd: null | string
   empty: string
   expanded: number | null
   files: Record<number, HermesGithubPrFile[]>
   prs: HermesGithubPr[]
+  onCheckout: (pr: HermesGithubPr) => void
   onComment: (pr: HermesGithubPr) => void
   onOpen: (path: string) => void
   onOpenDoc: (pr: HermesGithubPr) => void
@@ -384,6 +471,16 @@ function PrList({
               type="button"
             >
               {pr.title}
+            </button>
+            <CheckBadge pr={pr} />
+            <button
+              className="shrink-0 px-1 text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-40"
+              disabled={!cwd || busy}
+              onClick={() => onCheckout(pr)}
+              title={t.ide.githubCheckout}
+              type="button"
+            >
+              {t.ide.githubCheckout}
             </button>
             <button
               className="shrink-0 px-1 text-[11px] text-muted-foreground hover:text-foreground"
@@ -417,34 +514,80 @@ function PrList({
 }
 
 function IssueList({
+  busy,
+  cwd,
   empty,
   issues,
-  onOpenDoc
+  onOpenDoc,
+  onStart
 }: {
+  busy: boolean
+  cwd: null | string
   empty: string
   issues: HermesGithubIssue[]
   onOpenDoc: (title: string, markdown: string) => void
+  onStart: (issue: HermesGithubIssue) => void
 }) {
+  const { t } = useI18n()
+
   return (
     <>
       <Empty count={issues.length} label={empty} />
       {issues.map(issue => (
-        <button
-          className="block h-6 w-full truncate px-6 text-left text-xs hover:bg-(--ui-control-hover-background)"
-          key={issue.number}
-          onClick={() =>
-            onOpenDoc(
-              `Issue #${issue.number}`,
-              [`# ${issue.title}`, '', `- Number: #${issue.number}`, `- Author: ${issue.author || 'unknown'}`, `- URL: ${issue.url}`, '', '> Reply in chat on the right; confirm before posting to GitHub.'].join('\n')
-            )
-          }
-          title={issue.title}
-          type="button"
-        >
-          {issue.title}
-        </button>
+        <div className="flex h-6 min-w-0 items-center gap-1 pr-2 pl-6" key={issue.number}>
+          <button
+            className="min-w-0 flex-1 truncate text-left text-xs hover:bg-(--ui-control-hover-background)"
+            onClick={() =>
+              onOpenDoc(
+                `Issue #${issue.number}`,
+                [
+                  `# ${issue.title}`,
+                  '',
+                  `- Number: #${issue.number}`,
+                  `- Author: ${issue.author || 'unknown'}`,
+                  `- URL: ${issue.url}`,
+                  '',
+                  '> Use **Start** to create a branch (`gh issue develop`). Reply in chat to comment.'
+                ].join('\n')
+              )
+            }
+            title={issue.title}
+            type="button"
+          >
+            {issue.title}
+          </button>
+          <button
+            className="shrink-0 px-1 text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-40"
+            disabled={!cwd || busy}
+            onClick={() => onStart(issue)}
+            title={t.ide.githubStartIssue}
+            type="button"
+          >
+            {t.ide.githubStartIssue}
+          </button>
+        </div>
       ))}
     </>
+  )
+}
+
+function CheckBadge({ pr }: { pr: HermesGithubPr }) {
+  const { t } = useI18n()
+  const state = pr.checkState || 'none'
+
+  if (state === 'none') {
+    return null
+  }
+
+  const label =
+    state === 'pass' ? t.ide.githubCheckPass : state === 'fail' ? t.ide.githubCheckFail : t.ide.githubCheckPending
+  const color =
+    state === 'pass' ? 'text-[#73c991]' : state === 'fail' ? 'text-[#c74e39]' : 'text-[#e2c08d]'
+
+  return (
+    <span className={cn('shrink-0 text-[10px] font-medium', color)} title={`${label}${pr.checkDetail ? ` · ${pr.checkDetail}` : ''}`}>
+      {state === 'pass' ? '✓' : state === 'fail' ? '✕' : '…'}
+    </span>
   )
 }
 

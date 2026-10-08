@@ -4406,6 +4406,7 @@ export const deOverrides = {
       stage: 'Stagen',
       unstage: 'Unstagen',
       stageAll: 'Alles stagen',
+      unstageAll: 'Alles unstagen',
       viewAsTree: 'Als Baum ansehen',
       viewAsList: 'Als Liste ansehen',
       revert: 'Zurücksetzen',

@@ -456,7 +456,10 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
       createPr: repoPath => ipcRenderer.invoke('hermes:git:review:createPr', repoPath)
     },
     githubSidebar: repoPath => ipcRenderer.invoke('hermes:git:githubSidebar', repoPath),
-    githubPrFiles: (repoPath, number) => ipcRenderer.invoke('hermes:git:githubPrFiles', repoPath, number)
+    githubPrFiles: (repoPath, number) => ipcRenderer.invoke('hermes:git:githubPrFiles', repoPath, number),
+    githubCheckoutPr: (repoPath, number) => ipcRenderer.invoke('hermes:git:githubCheckoutPr', repoPath, number),
+    githubStartIssue: (repoPath, number) => ipcRenderer.invoke('hermes:git:githubStartIssue', repoPath, number),
+    githubPrChecks: (repoPath, number) => ipcRenderer.invoke('hermes:git:githubPrChecks', repoPath, number)
   },
   terminal: {
     attach: id => ipcRenderer.invoke('hermes:terminal:attach', id),

@@ -1830,12 +1830,12 @@ Menu.setApplicationMenu(null)
 // Windows toast notifications silently no-op unless an AppUserModelID is set:
 // `new Notification().show()` returns without error and nothing appears. The
 // AUMID must match the installed Start Menu shortcut's AUMID, which
-// electron-builder derives from the build `appId` (com.argb.hermes) —
+// electron-builder derives from the build `appId` (com.hermeside.hermes) —
 // keep this string in sync with product-identity.appId. macOS/Linux don't
 // need this, so gate it on Windows. (Fixes: desktop approval/turn notifications
 // never firing on Windows.)
 if (IS_WINDOWS) {
-  app.setAppUserModelId(IDENTITY_APP_NAME ? PRODUCT_IDENTITY.appId : 'com.argb.hermes')
+  app.setAppUserModelId(IDENTITY_APP_NAME ? PRODUCT_IDENTITY.appId : 'com.hermeside.hermes')
 }
 
 // Seed the native About panel with the best-known Hermes version. This is
@@ -1847,7 +1847,7 @@ if (IS_WINDOWS) {
 app.setAboutPanelOptions({
   applicationName: APP_NAME,
   applicationVersion: nativeAboutVersion(appVersionInfo(INSTALL_STAMP, '', app.getVersion())),
-  copyright: 'Copyright © 2026 argb'
+  copyright: 'Copyright © 2026'
 })
 
 // Custom scheme for streaming audio/video into the renderer. Local paths read
@@ -18513,7 +18513,7 @@ function showAboutPanelFresh(): void {
     app.setAboutPanelOptions({
       applicationName: APP_NAME,
       applicationVersion: skew.outOfSync ? `${display} — app build out of date, update the desktop app` : display,
-      copyright: 'Copyright © 2026 argb'
+      copyright: 'Copyright © 2026'
     })
     app.showAboutPanel()
   })

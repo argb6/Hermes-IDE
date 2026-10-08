@@ -11,8 +11,11 @@ import {
   fileConflictSides,
   fileDiffVsHead,
   fileHistory,
+  githubCheckoutPr,
+  githubPrChecks,
   githubPrFiles,
   githubSidebar,
+  githubStartIssue,
   repoLog,
   repoStatus,
   reviewCommit,
@@ -127,6 +130,15 @@ export function registerGitIpc({ resolveGitBinary, resolveGhBinary }: GitIpcDeps
   ipcMain.handle('hermes:git:githubSidebar', async (_event, repoPath) => githubSidebar(repoPath, resolveGhBinary()))
   ipcMain.handle('hermes:git:githubPrFiles', async (_event, repoPath, number) =>
     githubPrFiles(repoPath, number, resolveGhBinary())
+  )
+  ipcMain.handle('hermes:git:githubCheckoutPr', async (_event, repoPath, number) =>
+    githubCheckoutPr(repoPath, number, resolveGhBinary())
+  )
+  ipcMain.handle('hermes:git:githubStartIssue', async (_event, repoPath, number) =>
+    githubStartIssue(repoPath, number, resolveGhBinary())
+  )
+  ipcMain.handle('hermes:git:githubPrChecks', async (_event, repoPath, number) =>
+    githubPrChecks(repoPath, number, resolveGhBinary())
   )
 
   // Repo-first project discovery: scan bounded roots for git repos (pure fs walk,

@@ -51,19 +51,21 @@ describe('ReviewPane header gating', () => {
     $reviewScope.set('uncommitted')
   })
 
-  it('enables stage-all / revert-all under the uncommitted scope', () => {
+  it('enables stage-all / unstage-all / revert-all under the uncommitted scope', () => {
     renderPane()
 
     expect((screen.getByLabelText('Stage all') as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByLabelText('Unstage all') as HTMLButtonElement).disabled).toBe(false)
     expect((screen.getByLabelText('Revert all') as HTMLButtonElement).disabled).toBe(false)
   })
 
-  it('disables stage-all / revert-all under the branch scope (read-only)', () => {
+  it('disables stage-all / unstage-all / revert-all under the branch scope (read-only)', () => {
     $reviewScope.set('branch')
 
     renderPane()
 
     expect((screen.getByLabelText('Stage all') as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByLabelText('Unstage all') as HTMLButtonElement).disabled).toBe(true)
     expect((screen.getByLabelText('Revert all') as HTMLButtonElement).disabled).toBe(true)
   })
 

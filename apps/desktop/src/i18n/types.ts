@@ -690,11 +690,22 @@ export interface Translations {
     shellPowershell: string
     shellCmd: string
     githubNeedAuth: string
+    githubNeedInstall: string
     githubReady: string
     githubAccount: (name: string) => string
     githubLogin: string
     githubLoginHint: string
+    githubLoginSteps: string
+    githubDocs: string
     githubCheck: string
+    githubCheckout: string
+    githubChecks: string
+    githubCheckPass: string
+    githubCheckFail: string
+    githubCheckPending: string
+    githubStartIssue: string
+    githubActionBusy: string
+    githubActionFailed: string
     githubPrs: string
     githubIssues: string
     githubPullRequests: string
@@ -708,6 +719,7 @@ export interface Translations {
     githubNone: string
     githubSync: string
     githubClone: string
+    unstageAll: string
     staged: string
     modified: string
     untracked: string
@@ -3488,6 +3500,7 @@ export interface Translations {
       stage: string
       unstage: string
       stageAll: string
+      unstageAll: string
       viewAsTree: string
       viewAsList: string
       revert: string
