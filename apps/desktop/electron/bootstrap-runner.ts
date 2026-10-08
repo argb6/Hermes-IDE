@@ -224,12 +224,35 @@ function cachedScriptPath(hermesHome, cacheKey) {
   return path.join(bootstrapCacheDir(hermesHome), `install-${cacheKey}.${process.platform === 'win32' ? 'ps1' : 'sh'}`)
 }
 
+/** Hermes-IDE ships from this fork; bootstrap must not pull NousResearch. */
+const BOOTSTRAP_GITHUB_REPO =
+  process.env.HERMES_BOOTSTRAP_GITHUB_REPO || 'argb6/Hermes-IDE'
+const BOOTSTRAP_REPO_URL =
+  process.env.HERMES_REPO_URL || `https://github.com/${BOOTSTRAP_GITHUB_REPO}.git`
+
+function resolvePackagedInstallScript() {
+  const resourcesPath = typeof process.resourcesPath === 'string' ? process.resourcesPath : ''
+  if (!resourcesPath) {
+    return null
+  }
+
+  const candidate = path.join(resourcesPath, installScriptName())
+
+  try {
+    fs.accessSync(candidate, fs.constants.R_OK)
+
+    return candidate
+  } catch {
+    return null
+  }
+}
+
 function downloadInstallScript(ref, destPath) {
   // Fetch from GitHub raw at the install ref: the packaged SHA for a fresh
   // install, the branch for an existing checkout or a non-git fallback stamp
   // (never the all-zero placeholder, which is not a real GitHub commit).
   const scriptName = installScriptName()
-  const url = `https://raw.githubusercontent.com/NousResearch/hermes-agent/${ref}/scripts/${scriptName}`
+  const url = `https://raw.githubusercontent.com/${BOOTSTRAP_GITHUB_REPO}/${ref}/scripts/${scriptName}`
 
   return new Promise((resolve, reject) => {
     fs.mkdirSync(path.dirname(destPath), { recursive: true })
@@ -329,7 +352,20 @@ async function resolveInstallScript({
     return { path: localScript, source: 'local', kind: installScriptKind() }
   }
 
-  // 2. Packaged path: download using the same identity policy as the stages.
+  // 1b. Packaged NSIS/MSIX: use the install script shipped in resources so
+  //     first-run clones this fork even before the commit is on GitHub raw.
+  const packagedScript = resolvePackagedInstallScript()
+
+  if (packagedScript) {
+    emit({
+      type: 'log',
+      line: `[bootstrap] using packaged ${installScriptName()} at ${packagedScript}`
+    })
+
+    return { path: packagedScript, source: 'packaged', kind: installScriptKind() }
+  }
+
+  // 2. Packaged path without a shipped script: download from this fork.
   // Fresh installs use the packaged commit; existing checkouts and non-git
   // fallback builds follow the branch.
   const installRef = installRefForStamp(installStamp, { pinCommit })
@@ -430,7 +466,12 @@ function cleanInstallerLogLine(raw: string): string {
 // when it is new enough), so store dirs already on PATH stay ahead of the
 // login-shell entries shell-path.ts merged in front of them.
 function installerEnv(hermesHome) {
-  const env = { ...process.env, HERMES_HOME: hermesHome || process.env.HERMES_HOME || '' }
+  const env = {
+    ...process.env,
+    HERMES_HOME: hermesHome || process.env.HERMES_HOME || '',
+    // Clone this fork unless the caller already pinned HERMES_REPO_URL.
+    HERMES_REPO_URL: process.env.HERMES_REPO_URL || BOOTSTRAP_REPO_URL
+  }
   const key = pathEnvKey(env)
 
   env[key] = storeFirstPath(env[key] || '', { currentEnv: env })

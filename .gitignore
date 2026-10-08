@@ -319,6 +319,9 @@ native/fts5_cjk/*.so
 .build/
 .cache/
 
+# Local AI/codebase index caches (must never be committed; can be hundreds of MB)
+.claude/cache/
+
 # PM lockfile advisory lock; kept in place so waiting writers share its inode
 /pm/.lock.json.lock
 

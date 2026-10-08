@@ -247,7 +247,12 @@ module.exports = {
     // The updaters' relaunch waiter is PowerShell run outside the package. The
     // sealed payload's snapshot omits scripts/, so it ships as a resource
     // (RELAUNCH_WAITER_SCRIPT in electron/updater/relaunch-waiter.ts).
-    extraResources: [{ from: 'scripts/update-relaunch-waiter.ps1', to: 'update-relaunch-waiter.ps1' }],
+    extraResources: [
+      { from: 'scripts/update-relaunch-waiter.ps1', to: 'update-relaunch-waiter.ps1' },
+      // Bootstrap installs from this fork; ship install.ps1 so first-run does
+      // not depend on NousResearch raw.githubusercontent.com.
+      { from: '../../scripts/install.ps1', to: 'install.ps1' }
+    ],
     ...windowsSigning()
   },
   // Hermes-IDE assisted installer: pick an install directory (standard NSIS).

@@ -53,15 +53,19 @@ hermes desktop --force-build   # 桌面构建异常时强制重建
 
 可用 NSIS 安装包安装桌面应用（目前仅 x64）。安装时可自选路径，建议选一个专用的空目录。
 
-本地打包（开发机）：
+**推荐：轻量 NSIS + 首启从 GitHub 下载**（bootstrap）。安装包只含 Electron 桌面壳；第一次启动会从 GitHub 拉取 `install.ps1` 并安装 agent 运行时（需联网，可用代理）。体积小，打包快。
 
 ```powershell
+# 仓库根已 npm ci 后
 cd apps\desktop
-$env:HERMES_DESKTOP_WIN_TARGET = 'nsis'
 npm run dist:win:nsis
 ```
 
-产物在 `apps/desktop/release/`（或你设置的 `HERMES_DESKTOP_RELEASE_DIR`）。
+首启从本仓库 [argb6/Hermes-IDE](https://github.com/argb6/Hermes-IDE) 克隆安装（安装包内已带 `install.ps1`；可用 `HERMES_REPO_URL` / `HERMES_BOOTSTRAP_GITHUB_REPO` 覆盖）。
+
+产物在 `apps/desktop/release/`（文件名形如 `Hermes-IDE windows ×86-<version>.exe`，或你设置的 `HERMES_DESKTOP_RELEASE_DIR`）。
+
+完整自包含离线包（`npm run dist:win:nsis:bundled`，内嵌 Python/Node 等）在本机 Desktop 深路径下容易因 cargo 路径过长失败；需要时用短路径 `HERMES_PAYLOAD_OUT`（见 `apps/desktop/scripts/dist-win-nsis-bundled.mjs`）。
 
 ## 故障排查
 
