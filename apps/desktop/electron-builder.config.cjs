@@ -132,7 +132,11 @@ module.exports = {
     'public/**',
     'package.json',
     'node_modules/@vscode/ripgrep/**/*',
-    'node_modules/@vscode/ripgrep-*/**/*'
+    'node_modules/@vscode/ripgrep-*/**/*',
+    // electron-builder injects `!**/node_modules/**` before these includes.
+    // Staged natives live under dist/node_modules (before-pack); re-include or
+    // the packaged app throws ERR_MODULE_NOT_FOUND for node-pty / get-windows.
+    'dist/node_modules/**/*'
   ],
   beforeBuild: channelRequest ? async () => {
     await require(path.join(__dirname, 'scripts/before-build.mjs')).default()

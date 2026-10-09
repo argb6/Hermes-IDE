@@ -12,6 +12,16 @@ read signing secrets. `CSC_IDENTITY_AUTO_DISCOVERY=false` skips certificate
 lookup. Azure signing in `windowsSigning()` already no-ops when
 `AZURE_SIGN_ENDPOINT` / `AZURE_CLIENT_ID` are unset.
 
+## Staged natives (`node-pty`, `get-windows`)
+
+`before-pack` copies prepared natives into `dist/node_modules/`. electron-builder
+still injects `!**/node_modules/**`, so `files` must list `dist/node_modules/**/*`
+or the installed app fails at launch with `Cannot find package 'node-pty'`.
+
+After install they unpack under:
+
+`<install dir>\resources\app.asar.unpacked\dist\node_modules\node-pty\`
+
 ## ripgrep
 
 `@vscode/ripgrep@1.18.0` (added by the IDE frontend PR) has no `postinstall`.
