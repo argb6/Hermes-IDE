@@ -1,37 +1,71 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { lspRequest, lspStart, lspStatus } from './lsp-client'
+import type { LspBridge } from '../../../electron/ide/contract'
 
-describe('lsp client', () => {
-  beforeEach(() => {
-    window.hermesDesktop = { lsp: undefined } as unknown as Window['hermesDesktop']
-  })
+import { lspRequest, lspStart } from './lsp-client'
 
-  it('stays unavailable when the bridge is missing', async () => {
-    await expect(lspStart({ languageId: 'python', rootPath: '/work' })).resolves.toEqual({ state: 'unavailable' })
-    await expect(lspStatus({ languageId: 'typescript', rootPath: '/work' })).resolves.toEqual({ state: 'unavailable' })
-    await expect(lspRequest({ languageId: 'python', method: 'textDocument/hover', params: {}, rootPath: '/work' })).resolves.toBeNull()
-  })
-
-  it('returns the bridge payload and swallows a rejected invoke', async () => {
-    const start = vi.fn().mockResolvedValue({ state: 'ready' })
-    const request = vi.fn().mockRejectedValue(new Error('No handler registered'))
-
-    window.hermesDesktop.lsp = {
+function install(partial: Partial<LspBridge>) {
+  window.hermesDesktop = {
+    lsp: {
       didChange: vi.fn(),
       didClose: vi.fn(),
       didOpen: vi.fn(),
       onDiagnostics: () => () => undefined,
-      onStatus: () => () => undefined,
-      request,
-      start,
+      request: vi.fn(),
+      start: vi.fn(),
       status: vi.fn(),
-      stop: vi.fn()
+      stop: vi.fn(),
+      ...partial
     }
+  } as unknown as Window['hermesDesktop']
+}
 
-    await expect(lspStart({ languageId: 'python', rootPath: '/work' })).resolves.toEqual({ state: 'ready' })
-    await expect(
-      lspRequest({ languageId: 'python', method: 'textDocument/hover', params: {}, rootPath: '/work' })
-    ).resolves.toBeNull()
+describe('lsp client', () => {
+  beforeEach(() => {
+    window.hermesDesktop = {} as unknown as Window['hermesDesktop']
+  })
+
+  it('stays unavailable and does not throw when the bridge is missing', async () => {
+    await expect(lspStart({ language: 'python', workspaceRoot: '/work' })).resolves.toEqual({
+      language: 'python',
+      ok: false,
+      reason: 'offline',
+      status: 'unavailable'
+    })
+    await expect(lspRequest({ language: 'python', method: 'textDocument/hover', workspaceRoot: '/work' })).resolves.toBeNull()
+  })
+
+  it('retries a not-ready request once status is ready', async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, reason: 'not-ready', status: 'downloading' })
+      .mockResolvedValueOnce({ ok: true, result: { contents: 'typed' } })
+
+    install({
+      request,
+      status: vi.fn().mockResolvedValue({ languages: [{ language: 'python', status: 'ready' }] })
+    })
+
+    await expect(lspRequest({ language: 'python', method: 'textDocument/hover', workspaceRoot: '/work' })).resolves.toEqual({
+      contents: 'typed'
+    })
+    expect(request).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not retry an offline start', async () => {
+    const start = vi.fn().mockResolvedValue({
+      language: 'python',
+      ok: false,
+      reason: 'offline',
+      status: 'unavailable'
+    })
+
+    install({ start })
+
+    await expect(lspStart({ language: 'python', workspaceRoot: '/work' })).resolves.toMatchObject({
+      reason: 'offline',
+      status: 'unavailable'
+    })
+    expect(start).toHaveBeenCalledTimes(1)
   })
 })

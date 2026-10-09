@@ -26,6 +26,12 @@ export function toggleIdeWordWrap() {
   }
 }
 
+export const $ideColorTheme = atom<string | null>(null)
+
+export function noteIdeColorTheme(id: string) {
+  $ideColorTheme.set(id)
+}
+
 export const $lspStatus = atom<Record<string, LspState>>({})
 
 export function noteLspStatus(languageId: string, state: LspState) {

@@ -2,9 +2,19 @@ import * as monaco from 'monaco-editor'
 import { $focusedWorkspaceCwd } from '@/store/session-states'
 
 import { fileUri, lspLanguageId } from './ide-language'
-import { noteLspStatus, replaceDiagnostics } from './ide-state'
-import type { LspDiagnostic } from './ipc-types'
-import { lspRequest, onLspDiagnostics, onLspStatus } from './lsp-client'
+import { replaceDiagnostics } from './ide-state'
+import { lspRequest, onLspDiagnostics } from './lsp-client'
+
+interface LspDiagnostic {
+  code?: number | string
+  message: string
+  range: {
+    end: { character: number; line: number }
+    start: { character: number; line: number }
+  }
+  severity?: number
+  source?: string
+}
 
 const LANGUAGE_IDS = ['python', 'typescript', 'javascript'] as const
 
@@ -26,7 +36,7 @@ async function ask(model: monaco.editor.ITextModel, method: string, params: unkn
     return null
   }
 
-  return lspRequest({ languageId, method, params, rootPath })
+  return lspRequest({ language: languageId, method, params, workspaceRoot: rootPath })
 }
 
 function position(pos: monaco.Position) {
@@ -129,6 +139,37 @@ function hoverContents(result: unknown): monaco.IMarkdownString[] {
   })
 }
 
+function diagnosticItems(value: unknown[]): LspDiagnostic[] {
+  return value.flatMap(item => {
+    if (!isRecord(item) || typeof item.message !== 'string' || !isRecord(item.range)) {
+      return []
+    }
+
+    const range = item.range
+
+    if (!isRecord(range.start) || !isRecord(range.end)) {
+      return []
+    }
+
+    return [
+      {
+        code: typeof item.code === 'number' || typeof item.code === 'string' ? item.code : undefined,
+        message: item.message,
+        range: {
+          end: { character: numberField(range.end.character), line: numberField(range.end.line) },
+          start: { character: numberField(range.start.character), line: numberField(range.start.line) }
+        },
+        severity: typeof item.severity === 'number' ? item.severity : undefined,
+        source: typeof item.source === 'string' ? item.source : undefined
+      }
+    ]
+  })
+}
+
+function numberField(value: unknown) {
+  return typeof value === 'number' ? value : 0
+}
+
 function markers(diagnostics: LspDiagnostic[]): monaco.editor.IMarkerData[] {
   return diagnostics.flatMap(item => {
     const range = toRange(item.range as unknown as Record<string, unknown>)
@@ -156,18 +197,18 @@ export function registerLspProviders() {
 
   registered = true
 
-  onLspStatus(event => noteLspStatus(event.languageId, event.state))
   onLspDiagnostics(event => {
     const uri = monaco.Uri.parse(event.uri)
     const model = monaco.editor.getModel(uri)
+    const diagnostics = diagnosticItems(event.diagnostics)
 
     if (model) {
-      monaco.editor.setModelMarkers(model, 'lsp', markers(event.diagnostics))
+      monaco.editor.setModelMarkers(model, 'lsp', markers(diagnostics))
     }
 
     replaceDiagnostics(
       event.uri,
-      event.diagnostics.flatMap(item => {
+      diagnostics.flatMap(item => {
         const range = toRange(item.range as unknown as Record<string, unknown>)
 
         if (!range) {

@@ -17,8 +17,8 @@ import {
   $debugLocation,
   $ideBreakpoints,
   $ideBreakpointsEnabled,
+  $ideColorTheme,
   $ideWordWrap,
-  noteLspStatus,
   toggleIdeBreakpoint
 } from './ide-state'
 import { $ideGoto } from './ide-nav'
@@ -75,6 +75,8 @@ export function IdeMonaco({
   const onSaveRef = useRef(onSave)
   const { renderedMode } = useTheme()
   const wrap = useStore($ideWordWrap)
+  const colorTheme = useStore($ideColorTheme)
+  const monacoTheme = colorTheme || (renderedMode === 'dark' ? 'vs-dark' : 'vs')
 
   onChangeRef.current = onChange
   onCaretRef.current = onCaret
@@ -106,7 +108,7 @@ export function IdeMonaco({
       readOnly,
       scrollBeyondLastLine: false,
       tabSize: 4,
-      theme: renderedMode === 'dark' ? 'vs-dark' : 'vs',
+      theme: monacoTheme,
       wordWrap: wrap ? 'on' : 'off'
     })
 
@@ -172,8 +174,8 @@ export function IdeMonaco({
   }, [host, minimap, modelUri, path, readOnly])
 
   useEffect(() => {
-    monaco.editor.setTheme(renderedMode === 'dark' ? 'vs-dark' : 'vs')
-  }, [renderedMode])
+    monaco.editor.setTheme(monacoTheme)
+  }, [monacoTheme])
 
   useEffect(() => {
     const editor = editorRef.current
@@ -258,22 +260,36 @@ function bindDocument(model: monaco.editor.ITextModel, path: string) {
   let timer = 0
   const rootPath = () => $focusedWorkspaceCwd.get() || ''
   const uri = model.uri.toString()
-  const payload = () => ({ languageId, rootPath: rootPath(), text: model.getValue(), uri, version })
+  const workspaceRoot = () => rootPath()
+  const document = () => ({
+    language: languageId,
+    languageId,
+    text: model.getValue(),
+    uri,
+    version,
+    workspaceRoot: workspaceRoot()
+  })
 
-  void lspStart({ languageId, rootPath: rootPath() }).then(result => noteLspStatus(languageId, result.state))
-  void lspDidOpen(payload())
+  void lspStart({ language: languageId, workspaceRoot: workspaceRoot() })
+  void lspDidOpen(document())
 
   return {
     change() {
       window.clearTimeout(timer)
       timer = window.setTimeout(() => {
         version += 1
-        void lspDidChange(payload())
+        void lspDidChange({
+          contentChanges: [{ text: model.getValue() }],
+          language: languageId,
+          uri,
+          version,
+          workspaceRoot: workspaceRoot()
+        })
       }, 160)
     },
     close() {
       window.clearTimeout(timer)
-      void lspDidClose({ languageId, rootPath: rootPath(), uri })
+      void lspDidClose({ language: languageId, uri, workspaceRoot: workspaceRoot() })
     }
   }
 }

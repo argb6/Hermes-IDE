@@ -64,4 +64,7 @@ test('replaceInText honors literal, regex, case, and whole word', () => {
 
   assert.equal(pattern.text, 'x x')
   assert.equal(pattern.count, 2)
+
+  assert.equal(replaceInText('a\r\nb\r\n', { ...base, query: 'a', caseSensitive: true }, 'z').text, 'z\r\nb\r\n')
+  assert.throws(() => replaceInText('a', { ...base, query: '(', regex: true, caseSensitive: true }, 'z'))
 })

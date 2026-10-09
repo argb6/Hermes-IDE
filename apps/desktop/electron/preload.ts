@@ -23,6 +23,7 @@ const launchFlags: { localModels?: boolean; guestOnboarding?: boolean } | undefi
 const localSkin = ipcRenderer.sendSync('hermes:skin:local')
 
 import { unwrapExpectedNotFound } from './api-expected-404'
+import type { DapBridge, ExtBridge, LspBridge } from './ide/contract'
 
 contextBridge.exposeInMainWorld('hermesDesktop', {
   glassSupported: translucencySupport?.glass === true,
@@ -680,8 +681,9 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
 
     return () => ipcRenderer.removeListener('hermes:open-find-bar', listener)
   },
-  // IDE search runs ripgrep in the main process. LSP, DAP, and Open VSX
-  // extensions are forwarded to handlers the intelligence bridge registers.
+  // Workspace search runs ripgrep in this process. Code intelligence,
+  // debug adapters, and declarative extensions are the backend bridge
+  // (electron/ide/IPC.md). Failures resolve as a status; they don't reject.
   search: {
     start: request => ipcRenderer.invoke('hermes:search:start', request),
     cancel: id => ipcRenderer.invoke('hermes:search:cancel', id),
@@ -694,30 +696,24 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
     }
   },
   lsp: {
-    start: target => ipcRenderer.invoke('lsp:start', target),
-    stop: target => ipcRenderer.invoke('lsp:stop', target),
-    didOpen: doc => ipcRenderer.invoke('lsp:didOpen', doc),
-    didChange: doc => ipcRenderer.invoke('lsp:didChange', doc),
-    didClose: doc => ipcRenderer.invoke('lsp:didClose', doc),
-    request: payload => ipcRenderer.invoke('lsp:request', payload),
-    status: target => ipcRenderer.invoke('lsp:status', target),
+    start: request => ipcRenderer.invoke('lsp:start', request),
+    stop: request => ipcRenderer.invoke('lsp:stop', request),
+    didOpen: request => ipcRenderer.invoke('lsp:didOpen', request),
+    didChange: request => ipcRenderer.invoke('lsp:didChange', request),
+    didClose: request => ipcRenderer.invoke('lsp:didClose', request),
+    request: request => ipcRenderer.invoke('lsp:request', request),
+    status: query => ipcRenderer.invoke('lsp:status', query),
     onDiagnostics: callback => {
       const listener = (_event, payload) => callback(payload)
       ipcRenderer.on('lsp:diagnostics', listener)
 
       return () => ipcRenderer.removeListener('lsp:diagnostics', listener)
-    },
-    onStatus: callback => {
-      const listener = (_event, payload) => callback(payload)
-      ipcRenderer.on('lsp:status', listener)
-
-      return () => ipcRenderer.removeListener('lsp:status', listener)
     }
-  },
+  } satisfies LspBridge,
   dap: {
-    start: launch => ipcRenderer.invoke('dap:start', launch),
-    send: message => ipcRenderer.invoke('dap:send', message),
-    stop: sessionId => ipcRenderer.invoke('dap:stop', sessionId),
+    start: request => ipcRenderer.invoke('dap:start', request),
+    send: request => ipcRenderer.invoke('dap:send', request),
+    stop: request => ipcRenderer.invoke('dap:stop', request),
     status: () => ipcRenderer.invoke('dap:status'),
     onEvent: callback => {
       const listener = (_event, payload) => callback(payload)
@@ -725,11 +721,11 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
 
       return () => ipcRenderer.removeListener('dap:event', listener)
     }
-  },
+  } satisfies DapBridge,
   ext: {
     search: query => ipcRenderer.invoke('ext:search', query),
-    install: id => ipcRenderer.invoke('ext:install', id),
-    uninstall: id => ipcRenderer.invoke('ext:uninstall', id),
+    install: request => ipcRenderer.invoke('ext:install', request),
+    uninstall: request => ipcRenderer.invoke('ext:uninstall', request),
     list: () => ipcRenderer.invoke('ext:list')
-  }
+  } satisfies ExtBridge
 })

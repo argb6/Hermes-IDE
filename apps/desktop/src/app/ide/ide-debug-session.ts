@@ -1,6 +1,6 @@
 import { $focusedWorkspaceCwd } from '@/store/session-states'
 
-import { dapSend, dapStart, dapStop, onDapEvent } from './dap-client'
+import { dapLaunchArguments, dapSend, dapStart, dapStop, onDapEvent } from './dap-client'
 import { $ideEditor } from './ide-editor'
 import { debugAdapterFor } from './ide-language'
 import { requestIdeGoto } from './ide-nav'
@@ -22,6 +22,7 @@ import {
 } from './ide-state'
 
 let listening = false
+const configuring = new Map<string, Promise<void>>()
 
 function record(value: unknown): null | Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : null
@@ -33,8 +34,8 @@ export function ensureDebugEvents() {
   }
 
   listening = true
-  onDapEvent(event => {
-    void onDebugEvent(event.event, event.body)
+  onDapEvent(message => {
+    void onDebugEvent(message.sessionId, message.event.event, message.event.body)
   })
   $ideBreakpoints.subscribe(() => {
     const sessionId = $debugSessionId.get()
@@ -66,18 +67,51 @@ export async function debugStart(noDebug = false) {
 
   $debugNotice.set(null)
   $debugConsole.set([])
-  const result = await dapStart({ cwd, noDebug, program, request: 'launch', type })
+  const started = await dapStart({
+    adapter: type,
+    launch: { cwd, program, request: 'launch' },
+    workspaceRoot: cwd
+  })
 
-  if (!result.sessionId || result.state === 'unavailable') {
+  if (!started.ok || !started.sessionId || started.status === 'unavailable') {
     $debugPhase.set('unavailable')
     $debugSessionId.set(null)
 
     return
   }
 
-  $debugSessionId.set(result.sessionId)
+  const sessionId = started.sessionId
+
+  $debugSessionId.set(sessionId)
   $debugPhase.set('running')
-  await pushBreakpoints(result.sessionId)
+  const initialized = waitForInitialized(sessionId)
+
+  const handshake = await dapSend({
+    arguments: {
+      adapterID: type,
+      clientID: 'hermes-ide',
+      clientName: 'Hermes IDE',
+      columnsStartAt1: true,
+      linesStartAt1: true,
+      pathFormat: 'path'
+    },
+    command: 'initialize',
+    sessionId
+  })
+
+  if (!handshake.ok && handshake.status === 'unavailable') {
+    $debugPhase.set('unavailable')
+
+    return
+  }
+
+  await dapSend({
+    arguments: dapLaunchArguments({ adapter: type, cwd, noDebug, program, pythonPath: started.pythonPath }),
+    command: 'launch',
+    sessionId
+  })
+  await initialized
+  await completeConfiguration(sessionId)
 }
 
 export async function debugContinue() {
@@ -130,7 +164,8 @@ export async function debugStop() {
   }
 
   await dapSend({ arguments: { terminateDebuggee: true }, command: 'disconnect', sessionId })
-  await dapStop(sessionId)
+  await dapStop({ sessionId })
+  configuring.delete(sessionId)
   $debugSessionId.set(null)
   $debugPhase.set('stopped')
   $debugLocation.set(null)
@@ -189,15 +224,13 @@ export async function debugEvaluate(expression: string) {
     command: 'evaluate',
     sessionId
   })
-  const body = record(result.body)
+  const body = record(result.response?.body)
 
-  appendDebugConsole(typeof body?.result === 'string' ? body.result : result.message || '')
+  appendDebugConsole(typeof body?.result === 'string' ? body.result : result.response?.message || '')
 }
 
-async function onDebugEvent(name: string, body: unknown) {
-  const sessionId = $debugSessionId.get()
-
-  if (!sessionId) {
+async function onDebugEvent(sessionId: string, name: string, body: unknown) {
+  if ($debugSessionId.get() !== sessionId) {
     return
   }
 
@@ -219,6 +252,7 @@ async function onDebugEvent(name: string, body: unknown) {
   }
 
   if (name === 'terminated' || name === 'exited') {
+    configuring.delete(sessionId)
     $debugPhase.set('stopped')
     $debugSessionId.set(null)
     $debugLocation.set(null)
@@ -227,7 +261,7 @@ async function onDebugEvent(name: string, body: unknown) {
   }
 
   if (name === 'initialized') {
-    await pushBreakpoints(sessionId)
+    await completeConfiguration(sessionId)
 
     return
   }
@@ -243,6 +277,39 @@ async function onDebugEvent(name: string, body: unknown) {
 
     await refreshStack(sessionId, chosen)
   }
+}
+
+function waitForInitialized(sessionId: string) {
+  return new Promise<void>(resolve => {
+    const timer = window.setTimeout(() => {
+      off()
+      resolve()
+    }, 5_000)
+    const off = onDapEvent(message => {
+      if (message.sessionId === sessionId && message.event.event === 'initialized') {
+        window.clearTimeout(timer)
+        off()
+        resolve()
+      }
+    })
+  })
+}
+
+function completeConfiguration(sessionId: string) {
+  const existing = configuring.get(sessionId)
+
+  if (existing) {
+    return existing
+  }
+
+  const run = (async () => {
+    await pushBreakpoints(sessionId)
+    await dapSend({ command: 'configurationDone', sessionId })
+  })()
+
+  configuring.set(sessionId, run)
+
+  return run
 }
 
 async function pushBreakpoints(sessionId: string) {
@@ -270,7 +337,7 @@ async function pushBreakpoints(sessionId: string) {
 
 async function firstThread(sessionId: string) {
   const threads = await dapSend({ command: 'threads', sessionId })
-  const list = record(threads.body)?.threads
+  const list = record(threads.response?.body)?.threads
   const first = Array.isArray(list) ? record(list[0]) : null
 
   if (typeof first?.id !== 'number') {
@@ -288,7 +355,7 @@ async function refreshStack(sessionId: string, threadId: null | number) {
   }
 
   const response = await dapSend({ arguments: { threadId }, command: 'stackTrace', sessionId })
-  const raw = record(response.body)?.stackFrames
+  const raw = record(response.response?.body)?.stackFrames
   const frames: DebugFrame[] = Array.isArray(raw) ? raw.flatMap(toFrame) : []
 
   $debugFrames.set(frames)
@@ -330,7 +397,7 @@ function toFrame(item: unknown): DebugFrame[] {
 
 async function refreshVariables(sessionId: string, frameId: number) {
   const scopes = await dapSend({ arguments: { frameId }, command: 'scopes', sessionId })
-  const list = record(scopes.body)?.scopes
+  const list = record(scopes.response?.body)?.scopes
   const scope = Array.isArray(list) ? record(list[0]) : null
 
   if (typeof scope?.variablesReference !== 'number') {
@@ -344,7 +411,7 @@ async function refreshVariables(sessionId: string, frameId: number) {
     command: 'variables',
     sessionId
   })
-  const raw = record(vars.body)?.variables
+  const raw = record(vars.response?.body)?.variables
 
   $debugVariables.set(
     Array.isArray(raw)
@@ -370,11 +437,11 @@ async function refreshWatch(sessionId: string, frameId: number) {
       command: 'evaluate',
       sessionId
     })
-    const body = record(result.body)
+    const body = record(result.response?.body)
 
     next.push({
       expression: item.expression,
-      value: typeof body?.result === 'string' ? body.result : result.message || ''
+      value: typeof body?.result === 'string' ? body.result : result.response?.message || ''
     })
   }
 

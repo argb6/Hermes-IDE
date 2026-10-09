@@ -1,36 +1,42 @@
-import type { ExtBridge, InstalledExtension } from './ipc-types'
+import type {
+  ExtensionInstallResult,
+  ExtensionListResult,
+  ExtensionSearchResult,
+  ExtensionUninstallResult,
+  ExtBridge
+} from '../../../electron/ide/contract'
 
 function bridge(): ExtBridge | undefined {
   return window.hermesDesktop?.ext
 }
 
-export async function extSearch(query: string) {
+export async function extSearch(query: string): Promise<ExtensionSearchResult> {
   try {
-    return (await bridge()?.search(query)) ?? { extensions: [] }
+    return (await bridge()?.search({ query })) ?? { extensions: [], ok: false, reason: 'offline', status: 'unavailable' }
   } catch {
-    return { extensions: [], unavailable: true as const }
+    return { extensions: [], ok: false, reason: 'offline', status: 'unavailable' }
   }
 }
 
-export async function extList(): Promise<{ extensions: InstalledExtension[]; unavailable?: boolean }> {
+export async function extList(): Promise<ExtensionListResult> {
   try {
-    return (await bridge()?.list()) ?? { extensions: [] }
+    return (await bridge()?.list()) ?? { extensions: [], ok: false }
   } catch {
-    return { extensions: [], unavailable: true }
+    return { extensions: [], ok: false }
   }
 }
 
-export async function extInstall(id: string) {
+export async function extInstall(id: string): Promise<ExtensionInstallResult> {
   try {
-    return (await bridge()?.install(id)) ?? { state: 'unavailable' as const }
+    return (await bridge()?.install({ id })) ?? { ok: false, reason: 'offline', status: 'unavailable' }
   } catch {
-    return { state: 'unavailable' as const }
+    return { ok: false, reason: 'offline', status: 'unavailable' }
   }
 }
 
-export async function extUninstall(id: string) {
+export async function extUninstall(id: string): Promise<ExtensionUninstallResult> {
   try {
-    return (await bridge()?.uninstall(id)) ?? { ok: false }
+    return (await bridge()?.uninstall({ id })) ?? { ok: false }
   } catch {
     return { ok: false }
   }

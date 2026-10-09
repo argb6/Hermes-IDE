@@ -1,35 +1,55 @@
-import type { DapBridge, DapLaunch, DapMessage, DapResponse, DapStartResult } from './ipc-types'
+import type { DapAdapter, DapBridge, DapSendRequest, DapSendResult, DapStartRequest, DapStartResult, DapStopRequest } from '../../../electron/ide/contract'
 
-const OFFLINE: DapStartResult = { state: 'unavailable' }
+const OFFLINE_START: DapStartResult = { ok: false, reason: 'offline', status: 'unavailable' }
 
 function bridge(): DapBridge | undefined {
   return window.hermesDesktop?.dap
 }
 
-export function dapStart(launch: DapLaunch) {
+export function dapStart(request: DapStartRequest): Promise<DapStartResult> {
   const api = bridge()
 
   if (!api) {
-    return Promise.resolve(OFFLINE)
+    return Promise.resolve(OFFLINE_START)
   }
 
-  return api.start(launch).catch(() => OFFLINE)
+  return api.start(request).catch(() => OFFLINE_START)
 }
 
-export function dapSend(message: DapMessage): Promise<DapResponse> {
+export function dapSend(request: DapSendRequest): Promise<DapSendResult> {
   const api = bridge()
 
   if (!api) {
-    return Promise.resolve({ message: 'unavailable', success: false })
+    return Promise.resolve({ ok: false, reason: 'offline', status: 'unavailable' })
   }
 
-  return api.send(message).catch(() => ({ message: 'unavailable', success: false }))
+  return api.send(request).catch(() => ({ ok: false, reason: 'offline', status: 'unavailable' }))
 }
 
-export function dapStop(sessionId: string) {
-  return bridge()?.stop(sessionId).catch(() => ({ ok: false })) ?? Promise.resolve({ ok: false })
+export function dapStop(request: DapStopRequest = {}) {
+  return bridge()?.stop(request).catch(() => ({ ok: false })) ?? Promise.resolve({ ok: false })
 }
 
 export function onDapEvent(cb: Parameters<DapBridge['onEvent']>[0]) {
   return bridge()?.onEvent(cb) ?? (() => undefined)
+}
+
+/** DAP `launch` arguments. `pythonPath` is the interpreter `dap:start` spawned debugpy with. */
+export function dapLaunchArguments(options: {
+  adapter: DapAdapter
+  cwd: string
+  noDebug?: boolean
+  program: string
+  pythonPath?: string
+}): Record<string, unknown> {
+  return {
+    cwd: options.cwd,
+    program: options.program,
+    request: 'launch',
+    stopOnEntry: false,
+    ...(options.noDebug ? { noDebug: true } : {}),
+    ...(options.adapter === 'python' && options.pythonPath
+      ? { console: 'internalConsole', justMyCode: true, python: options.pythonPath }
+      : { console: 'internalConsole' })
+  }
 }
