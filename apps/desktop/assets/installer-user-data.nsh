@@ -1,5 +1,9 @@
-; Hermes-IDE uninstall: keep %LOCALAPPDATA%\hermes unless the user opts in.
+; Hermes-IDE install/uninstall helpers for agent home layout.
 ;
+; Install: pin HERMES_HOME to $INSTDIR\hermes so the app shell, checkout, and
+; data share one user-chosen folder (no sibling D:\hermes / D:\hp).
+;
+; Uninstall: keep agent data unless the user opts in.
 ; electron-updater runs this uninstaller with /S during every auto-update
 ; (installUtil.nsh: ExecWait "... /S ... --updated"). A silent run must never
 ; delete that folder. deleteAppDataOnUninstall stays off; it only knows about
@@ -17,6 +21,16 @@
 !ifndef FILEFUNC_INCLUDED
 !include "FileFunc.nsh"
 !endif
+
+; Runs after files are copied. Sets user HERMES_HOME to the colocated folder
+; and broadcasts the environment change so a relaunch without reboot picks it up.
+!macro customInstall
+  CreateDirectory "$INSTDIR\hermes"
+  WriteRegExpandStr HKCU "Environment" "HERMES_HOME" "$INSTDIR\hermes"
+  DetailPrint "HERMES_HOME=$INSTDIR\hermes"
+  ; WM_SETTINGCHANGE for "Environment" (SendMessageTimeout)
+  System::Call 'user32::SendMessageTimeout(i 0xffff, i 0x1A, i 0, t "Environment", i 0x2, i 5000, *i .r0)'
+!macroend
 
 !ifdef BUILD_UNINSTALLER
 
@@ -160,7 +174,7 @@ Var hermesDeleteUserDataCheckbox
       Abort
     ${EndIf}
 
-    ${NSD_CreateLabel} 0 0 100% 78u "将卸载 Hermes-IDE。$\r$\n$\r$\n用户数据默认保留：%LOCALAPPDATA%\hermes（配置、记忆、会话，以及语言服务、调试适配器和扩展）。$\r$\n$\r$\nHermes-IDE will be uninstalled. User data under %LOCALAPPDATA%\hermes is kept unless you check the box below."
+    ${NSD_CreateLabel} 0 0 100% 78u "将卸载 Hermes-IDE。$\r$\n$\r$\n用户数据默认保留：$INSTDIR\hermes（以及旧版 %LOCALAPPDATA%\hermes）。$\r$\n$\r$\nHermes-IDE will be uninstalled. User data under $INSTDIR\hermes (and legacy %LOCALAPPDATA%\hermes) is kept unless you check the box below."
     Pop $1
 
     ${NSD_CreateCheckbox} 0 86u 100% 14u "同时删除用户数据 / Also delete user data"
@@ -186,6 +200,14 @@ Var hermesDeleteUserDataCheckbox
   ${AndIfNot} ${isUpdated}
   ${AndIf} $hermesDeleteUserData == "1"
     !insertmacro hermesDeleteExactUserData
+    ${If} ${FileExists} "$INSTDIR\hermes"
+      DetailPrint "Deleting colocated user data: $INSTDIR\hermes"
+      RMDir /r "$INSTDIR\hermes"
+      ${If} ${Errors}
+        DetailPrint "Could not fully delete colocated user data: $INSTDIR\hermes"
+        ClearErrors
+      ${EndIf}
+    ${EndIf}
   ${EndIf}
 !macroend
 

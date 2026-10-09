@@ -8,11 +8,28 @@ import { $repoStatusByCwd, registerRepoStatusCwd } from '@/store/coding-status'
 
 import { IdeCheckout } from './ide-checkout'
 import { $ideEditor } from './ide-editor'
+import { IdeGatewayChip } from './ide-gateway-chip'
 import { $ideDiagnostics, $lspStatus } from './ide-state'
 import { $fileEncoding, encodingLabel, FILE_ENCODINGS, setFileEncoding } from './ide-encoding'
 
-/** Bottom status row: branch, problem counts, and the terminal button.
- *  Gateway status lives on the shared shell statusbar (avoid a duplicate pill). */
+/** LSP DiagnosticSeverity: 1 Error, 2 Warning, 3 Information, 4 Hint. */
+function diagnosticCounts(items: { severity: number }[]) {
+  let errors = 0
+  let warnings = 0
+
+  for (const item of items) {
+    if (item.severity === 2) {
+      warnings += 1
+    } else if (item.severity === 1 || item.severity < 1) {
+      // Missing severity treated as error (same as Monaco marker default).
+      errors += 1
+    }
+  }
+
+  return { errors, warnings }
+}
+
+/** Bottom status row: branch, gateway, LSP problem counts, and the terminal button. */
 export function IdeStatusBar({
   cwd,
   folder,
@@ -35,6 +52,7 @@ export function IdeStatusBar({
   const [encodings, setEncodings] = useState(false)
   const [checkout, setCheckout] = useState(false)
   const status = cwd ? (byCwd[cwd] ?? null) : null
+  const { errors, warnings } = diagnosticCounts(diagnostics)
 
   useEffect(() => registerRepoStatusCwd(cwd), [cwd])
 
@@ -53,13 +71,14 @@ export function IdeStatusBar({
         {checkout && cwd && <IdeCheckout cwd={cwd} onClose={() => setCheckout(false)} />}
       </div>
       {folder && <span className="max-w-40 truncate">{folder}</span>}
+      <IdeGatewayChip />
       <button className="flex items-center gap-1 hover:text-foreground" onClick={onOpenProblems} type="button">
         <Codicon name="error" size={14} />
-        {diagnostics.filter(item => item.severity !== 2).length || status?.conflicted || 0}
+        {errors}
       </button>
       <button className="flex items-center gap-1 hover:text-foreground" onClick={onOpenProblems} type="button">
         <Codicon name="warning" size={14} />
-        {status?.unstaged ?? 0}
+        {warnings}
       </button>
       <LspIndicator lsp={lsp} />
       <div className="flex-1" />

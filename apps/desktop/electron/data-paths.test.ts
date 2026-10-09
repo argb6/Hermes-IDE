@@ -39,6 +39,31 @@ test('default data roots append the suffix literally on each platform', (): void
   }
 })
 
+test('packaged installRoot colocates HERMES_HOME under the app directory', (): void => {
+  const windowsHome: string = 'C:\\Users\\test'
+
+  assert.equal(
+    resolveDesktopHermesHome({
+      home: windowsHome,
+      env: {},
+      platform: 'win32',
+      installRoot: 'D:\\Hermes-IDE',
+      directoryExists: (): boolean => false
+    }),
+    'D:\\Hermes-IDE\\hermes'
+  )
+
+  assert.equal(
+    resolveDesktopHermesHome({
+      home: windowsHome,
+      env: { HERMES_HOME: 'D:\\legacy-hermes' },
+      platform: 'win32',
+      installRoot: 'D:\\Hermes-IDE'
+    }),
+    'D:\\legacy-hermes'
+  )
+})
+
 test('explicit homes and userData retain precedence, and suffixed Windows homes never use legacy state', (): void => {
   const home: string = '/home/test'
 

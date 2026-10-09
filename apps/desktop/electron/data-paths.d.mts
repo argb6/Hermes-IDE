@@ -12,6 +12,8 @@ export interface HermesHomeOptions {
   platform?: NodeJS.Platform
   directoryExists?: (directory: string) => boolean
   readWindowsHome?: () => string | null
+  /** Packaged app install directory; when set, default home is `<installRoot>/hermes`. */
+  installRoot?: null | string
 }
 
 export function resolveDesktopHermesHome(options: HermesHomeOptions): string

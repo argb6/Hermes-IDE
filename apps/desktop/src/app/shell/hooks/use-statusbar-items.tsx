@@ -354,11 +354,12 @@ export function useStatusbarItems({
 
   const gatewayMenuContent = useMemo(
     () => (close: () => void) => (
-      <GatewayMenuPanel
+      <GatewayStatusMenu
+        close={close}
         gatewayState={gatewayState}
         inferenceStatus={inferenceStatus}
-        onClose={close}
-        onOpenSystem={() => openCommandCenterSection('system')}
+        // Fallback when the menu mounts outside a router (unit tests).
+        onOpenSystemFallback={() => openCommandCenterSection('system')}
         statusSnapshot={statusSnapshot}
       />
     ),
@@ -522,16 +523,16 @@ export function useStatusbarItems({
           <AlertCircle className="size-3" />
         ),
         id: 'gateway-health',
-        // IDE keeps the live chip; Agent mode already has gateway controls
-        // elsewhere and the "needs setup" amber label was noise on the rail/bar.
-        hidden: workspaceMode === 'agent',
+        // Always show: Agent and IDE both need a door into messaging gateway setup.
+        // (IDE also paints IdeGatewayChip because the shell statusbar is unmounted there.)
+        hidden: workspaceMode === 'ide',
         label: (
           <span className="inline-flex items-center gap-1">
             <span>{copy.gatewayTitle}</span>
             <span>{gatewayHealth.detail}</span>
           </span>
         ),
-        lockedVisible: workspaceMode !== 'agent',
+        lockedVisible: workspaceMode !== 'ide',
         menuClassName: 'w-72',
         menuContent: gatewayMenuContent,
         // Tip only when there's a real status reason — not a restatement of the label.
@@ -793,6 +794,40 @@ export function useStatusbarItems({
   )
 
   return { leftStatusbarItems, statusbarItems }
+}
+
+function GatewayStatusMenu({
+  close,
+  gatewayState,
+  inferenceStatus,
+  onOpenSystemFallback,
+  statusSnapshot
+}: {
+  close: () => void
+  gatewayState: string
+  inferenceStatus: RuntimeReadinessResult | null
+  onOpenSystemFallback: () => void
+  statusSnapshot: StatusResponse | null
+}) {
+  const navigate = useNavigate()
+
+  return (
+    <GatewayMenuPanel
+      gatewayState={gatewayState}
+      inferenceStatus={inferenceStatus}
+      onClose={close}
+      onOpenSystem={() => {
+        close()
+
+        try {
+          navigate(`${SETTINGS_ROUTE}?tab=gateway`)
+        } catch {
+          onOpenSystemFallback()
+        }
+      }}
+      statusSnapshot={statusSnapshot}
+    />
+  )
 }
 
 function StatusbarGatewaySwitcher() {

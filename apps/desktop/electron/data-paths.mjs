@@ -38,8 +38,16 @@ export function resolveDesktopUserData(defaultPath, env = process.env) {
     : defaultPath + (env.HERMES_DATA_DIR_SUFFIX || '')
 }
 
-export function resolveDesktopHermesHome({ home, env = process.env, platform = process.platform, directoryExists = () => false, readWindowsHome = () => null }) {
+export function resolveDesktopHermesHome({
+  home,
+  env = process.env,
+  platform = process.platform,
+  directoryExists = () => false,
+  readWindowsHome = () => null,
+  installRoot = null
+}) {
   const paths = platform === 'win32' ? path.win32 : path.posix
+  const suffix = env.HERMES_DATA_DIR_SUFFIX || ''
   if (env.HERMES_HOME) {
     return normalizeHermesHomeRoot(env.HERMES_HOME, paths)
   }
@@ -53,6 +61,11 @@ export function resolveDesktopHermesHome({ home, env = process.env, platform = p
     if (registryHome) {
       return normalizeHermesHomeRoot(registryHome, paths)
     }
+  }
+  // Packaged NSIS installs: keep agent home under the chosen InstallDir
+  // (`<InstallDir>/hermes`) so the drive root is not split into Hermes-IDE + hermes + hp.
+  if (installRoot) {
+    return paths.join(paths.resolve(String(installRoot)), 'hermes') + suffix
   }
   const defaultHome = platformDefaultHermesHome(home, env, platform)
   // Keep the legacy migration for ordinary installs, not isolated suffix runs.

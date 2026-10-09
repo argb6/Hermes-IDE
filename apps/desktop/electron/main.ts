@@ -1283,6 +1283,8 @@ if (process.env.HERMES_DESKTOP_TMPDIR) {
 const HERMES_HOME: string = resolveDesktopHermesHome({
   home: app.getPath('home'),
   directoryExists,
+  // Packaged installs colocate agent data under the NSIS InstallDir.
+  installRoot: IS_PACKAGED ? path.dirname(process.execPath) : null,
   readWindowsHome: (): string | null => readWindowsUserEnvVar('HERMES_HOME')
 })
 
