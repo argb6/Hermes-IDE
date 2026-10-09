@@ -1,9 +1,13 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
+import { createRequire as nodeCreateRequire } from 'node:module'
 import path from 'node:path'
 
-import { rgPath } from '@vscode/ripgrep'
 import { ipcMain, type WebContents } from 'electron'
+
+// Aliased so the main-process bundle banner can keep its own `createRequire`.
+// Requiring the package leaves `@vscode/ripgrep`'s ESM entry external.
+const { rgPath } = nodeCreateRequire(import.meta.url)('@vscode/ripgrep') as { rgPath: string }
 
 import { unpackAsarPath } from './ripgrep-path'
 import { buildRgArgs, parseRgMatch, replaceInText, type RgQuery } from './ripgrep-query'

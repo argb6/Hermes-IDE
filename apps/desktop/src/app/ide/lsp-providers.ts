@@ -1,7 +1,8 @@
 import * as monaco from 'monaco-editor'
 import { $focusedWorkspaceCwd } from '@/store/session-states'
 
-import { fileUri, lspLanguageId } from './ide-language'
+import { documentFileUri, documentUriForModel } from './document-uri'
+import { lspLanguageId } from './ide-language'
 import { replaceDiagnostics } from './ide-state'
 import { lspRequest, onLspDiagnostics } from './lsp-client'
 
@@ -44,7 +45,7 @@ function position(pos: monaco.Position) {
 }
 
 function textDocument(model: monaco.editor.ITextModel) {
-  return { uri: model.uri.toString() }
+  return { uri: documentUriForModel(model) }
 }
 
 function toRange(range: Record<string, unknown>): monaco.IRange | null {
@@ -340,5 +341,5 @@ export function registerLspProviders() {
 }
 
 export function lspUri(filePath: string) {
-  return monaco.Uri.file(filePath).toString() || fileUri(filePath)
+  return documentFileUri(filePath) || ''
 }

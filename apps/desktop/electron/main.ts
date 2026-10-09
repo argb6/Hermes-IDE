@@ -267,7 +267,7 @@ import {
 import { createFirstRunSetupGate } from './first-run-setup-gate'
 import { registerFsIpc } from './fs-ipc'
 import { ideBridgeChildEnv } from './ide/bridge'
-import { registerIdeIpc } from './ide/ipc'
+import { registerIdeFileUriIpc, registerIdeIpc } from './ide/ipc'
 import { decodeFileBytes } from './text-encoding'
 import type {
   GatewayFileSaveContext,
@@ -18435,6 +18435,7 @@ registerFsIpc({
 registerGitIpc({ resolveGitBinary, resolveGhBinary })
 registerRipgrepIpc()
 registerIdeIpc()
+registerIdeFileUriIpc()
 registerMcpOauthCallbackIpc()
 
 // Embedded terminal PTY host (hermes:terminal:*) — see terminal-ipc.ts.

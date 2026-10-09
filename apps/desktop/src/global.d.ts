@@ -658,6 +658,9 @@ declare global {
       }
       // Language servers, debug adapters, and Open VSX declarative extensions.
       // Main process owns the processes. Contract: electron/ide/IPC.md.
+      // `pathToFileUri` is the manager helper. Document URIs must use it so an
+      // agent didOpen sees the buffer the editor already has.
+      pathToFileUri?: (filePath: string) => string
       lsp: LspBridge
       dap: DapBridge
       ext: ExtBridge

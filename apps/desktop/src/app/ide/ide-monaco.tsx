@@ -11,6 +11,7 @@ import {
   type ActiveMonaco,
   noteActiveMonaco
 } from './ide-editor-actions'
+import { documentFileUri, documentUriForModel, rememberDocumentUri } from './document-uri'
 import { lspLanguageId, monacoLanguageId } from './ide-language'
 import './ide-monaco.css'
 import {
@@ -89,12 +90,13 @@ export function IdeMonaco({
       return
     }
 
-    const uri = monaco.Uri.parse(modelUri || monaco.Uri.file(path).toString())
+    const ownedUri = modelUri || documentFileUri(path)
+    const uri = monaco.Uri.parse(ownedUri || monaco.Uri.file(path).toString())
     const existing = monaco.editor.getModel(uri)
     const model = existing ?? monaco.editor.createModel(initialValue, monacoLanguageId(path), uri)
 
-    if (existing && existing.getValue() !== initialValue) {
-      existing.setValue(initialValue)
+    if (ownedUri && !modelUri) {
+      rememberDocumentUri(model, ownedUri)
     }
 
     const editor = monaco.editor.create(parent, {
@@ -259,7 +261,7 @@ function bindDocument(model: monaco.editor.ITextModel, path: string) {
   let version = 1
   let timer = 0
   const rootPath = () => $focusedWorkspaceCwd.get() || ''
-  const uri = model.uri.toString()
+  const uri = documentUriForModel(model)
   const workspaceRoot = () => rootPath()
   const document = () => ({
     language: languageId,

@@ -236,6 +236,12 @@ export default defineConfig(({ command }) => ({
         path.dirname(requireFromApp.resolve('driver.js')),
         'driver.js.iife.js'
       ),
+      // monaco-editor's exports map rewrites every subpath to esm/vs/*.js, so the
+      // packaged CSS is invisible to Vite unless aliased to the real file.
+      'monaco-editor/min/vs/editor/editor.main.css': path.join(
+        path.dirname(requireFromApp.resolve('monaco-editor')),
+        'editor/editor.main.css'
+      ),
       react: reactDir,
       'react-dom': reactDomDir,
       'react/jsx-dev-runtime': path.join(reactDir, 'jsx-dev-runtime.js'),

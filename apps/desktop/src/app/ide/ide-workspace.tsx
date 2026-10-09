@@ -32,6 +32,7 @@ import {
   openIdeDocument
 } from './ide-documents'
 import { $ideSaveRequest, noteIdeEditor } from './ide-editor'
+import { lspStart } from './lsp-client'
 import { setActiveIdeEditorGroup, syncIdeEditorGroup } from './ide-editor-groups'
 import { IdeExplorer } from './ide-explorer'
 import { IdeGit } from './ide-git'
@@ -62,6 +63,10 @@ interface OpenTab {
 }
 
 const GITHUB_CLONE_RE = /^(?:https:\/\/github\.com\/[\w.-]+\/[\w.-]+(?:\.git)?\/?|git@github\.com:[\w.-]+\/[\w.-]+(?:\.git)?)$/i
+
+// JavaScript and TypeScript share one server; starting each id is idempotent.
+// The agent bridge never calls lsp:start, so the workspace open has to.
+const WORKSPACE_LSP_LANGUAGES = ['python', 'typescript', 'javascript', 'typescriptreact', 'javascriptreact'] as const
 
 const PANEL_TITLE: Record<IdePanel, 'explorer' | 'extensions' | 'git' | 'github' | 'run' | 'search'> = {
   extensions: 'extensions',
@@ -154,6 +159,10 @@ export function IdeWorkspace() {
   useEffect(() => {
     if (cwd) {
       noteIdeRecentFolder(cwd)
+
+      for (const language of WORKSPACE_LSP_LANGUAGES) {
+        void lspStart({ language, workspaceRoot: cwd })
+      }
     }
   }, [cwd])
 

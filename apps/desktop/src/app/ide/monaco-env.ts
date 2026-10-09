@@ -1,8 +1,31 @@
-import CssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
-import HtmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
-import JsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
-import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
-import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
+// Package exports map `monaco-editor/<path>` onto `esm/vs/<path>.js`. The
+// `esm/vs/` prefix is not a valid subpath, so workers are imported without it.
+import CssWorker from 'monaco-editor/language/css/css.worker?worker'
+import HtmlWorker from 'monaco-editor/language/html/html.worker?worker'
+import JsonWorker from 'monaco-editor/language/json/json.worker?worker'
+import TsWorker from 'monaco-editor/language/typescript/ts.worker?worker'
+import EditorWorker from 'monaco-editor/editor/editor.worker?worker'
+
+/** jsdom has no matchMedia. Monaco's theme service calls it while the editor mounts. */
+function ensureMatchMedia() {
+  if (typeof window === 'undefined' || typeof window.matchMedia === 'function') {
+    return
+  }
+
+  window.matchMedia = (query: string) =>
+    ({
+      addEventListener() {},
+      addListener() {},
+      dispatchEvent() {
+        return false
+      },
+      matches: false,
+      media: query,
+      onchange: null,
+      removeEventListener() {},
+      removeListener() {}
+    }) as unknown as MediaQueryList
+}
 
 const WORKERS: Record<string, new () => Worker> = {
   css: CssWorker,
@@ -22,6 +45,8 @@ const WORKERS: Record<string, new () => Worker> = {
  * a packager that later leaves dist inside app.asar must unpack `*worker*`.
  */
 export function ensureMonacoEnvironment() {
+  ensureMatchMedia()
+
   const host = globalThis as typeof globalThis & {
     MonacoEnvironment?: { getWorker: (workerId: string, label: string) => Worker }
   }

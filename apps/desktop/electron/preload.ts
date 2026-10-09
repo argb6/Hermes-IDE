@@ -695,6 +695,13 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
       return () => ipcRenderer.removeListener('hermes:search:event', listener)
     }
   },
+  // Same string as `pathToFileUri` in electron/ide/lsp/manager.ts. Sync because
+  // Monaco builds the model URI during render; preload cannot import node:path.
+  pathToFileUri: (filePath: string) => {
+    const value = ipcRenderer.sendSync('hermes:lsp-file-uri', filePath)
+
+    return typeof value === 'string' ? value : ''
+  },
   lsp: {
     start: request => ipcRenderer.invoke('lsp:start', request),
     stop: request => ipcRenderer.invoke('lsp:stop', request),
