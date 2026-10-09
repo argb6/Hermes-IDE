@@ -10,6 +10,12 @@ export function requestIdeSideToggle() {
 }
 export const $ideOutlineTick = atom(0)
 export const $ideOpenPath = atom<null | { path: string; seq: number }>(null)
+export const $ideGoto = atom<null | { column: number; line: number; path: string; seq: number }>(null)
+
+export function requestIdeGoto(path: string, line: number, column = 1) {
+  requestIdeOpen(path)
+  $ideGoto.set({ column, line, path, seq: ($ideGoto.get()?.seq ?? 0) + 1 })
+}
 export const $ideQuickOpen = atom(0)
 export const $ideOutlineJump = atom<null | { name: string; seq: number }>(null)
 

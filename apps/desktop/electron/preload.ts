@@ -679,5 +679,57 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
     ipcRenderer.on('hermes:open-find-bar', listener)
 
     return () => ipcRenderer.removeListener('hermes:open-find-bar', listener)
+  },
+  // IDE search runs ripgrep in the main process. LSP, DAP, and Open VSX
+  // extensions are forwarded to handlers the intelligence bridge registers.
+  search: {
+    start: request => ipcRenderer.invoke('hermes:search:start', request),
+    cancel: id => ipcRenderer.invoke('hermes:search:cancel', id),
+    replace: request => ipcRenderer.invoke('hermes:search:replace', request),
+    onEvent: callback => {
+      const listener = (_event, payload) => callback(payload)
+      ipcRenderer.on('hermes:search:event', listener)
+
+      return () => ipcRenderer.removeListener('hermes:search:event', listener)
+    }
+  },
+  lsp: {
+    start: target => ipcRenderer.invoke('lsp:start', target),
+    stop: target => ipcRenderer.invoke('lsp:stop', target),
+    didOpen: doc => ipcRenderer.invoke('lsp:didOpen', doc),
+    didChange: doc => ipcRenderer.invoke('lsp:didChange', doc),
+    didClose: doc => ipcRenderer.invoke('lsp:didClose', doc),
+    request: payload => ipcRenderer.invoke('lsp:request', payload),
+    status: target => ipcRenderer.invoke('lsp:status', target),
+    onDiagnostics: callback => {
+      const listener = (_event, payload) => callback(payload)
+      ipcRenderer.on('lsp:diagnostics', listener)
+
+      return () => ipcRenderer.removeListener('lsp:diagnostics', listener)
+    },
+    onStatus: callback => {
+      const listener = (_event, payload) => callback(payload)
+      ipcRenderer.on('lsp:status', listener)
+
+      return () => ipcRenderer.removeListener('lsp:status', listener)
+    }
+  },
+  dap: {
+    start: launch => ipcRenderer.invoke('dap:start', launch),
+    send: message => ipcRenderer.invoke('dap:send', message),
+    stop: sessionId => ipcRenderer.invoke('dap:stop', sessionId),
+    status: () => ipcRenderer.invoke('dap:status'),
+    onEvent: callback => {
+      const listener = (_event, payload) => callback(payload)
+      ipcRenderer.on('dap:event', listener)
+
+      return () => ipcRenderer.removeListener('dap:event', listener)
+    }
+  },
+  ext: {
+    search: query => ipcRenderer.invoke('ext:search', query),
+    install: id => ipcRenderer.invoke('ext:install', id),
+    uninstall: id => ipcRenderer.invoke('ext:uninstall', id),
+    list: () => ipcRenderer.invoke('ext:list')
   }
 })

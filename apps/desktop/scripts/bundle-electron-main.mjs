@@ -54,7 +54,10 @@ export async function bundleElectronMain({ source, out, stamp, dev = false }) {
     bundle: true,
     platform: 'node',
     target: 'node20',
-    external: ['electron', 'node-pty', 'get-windows', 'fs'],
+    // `@vscode/ripgrep` resolves its binary with require.resolve from the real
+    // package. Bundling it would point rgPath at the bundle instead of
+    // `@vscode/ripgrep-<platform>-<arch>/bin/rg`.
+    external: ['electron', 'node-pty', 'get-windows', 'fs', '@vscode/ripgrep'],
     define,
     logLevel: 'info',
   }

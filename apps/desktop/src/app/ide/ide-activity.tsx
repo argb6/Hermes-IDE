@@ -5,13 +5,15 @@ import { Codicon } from '@/components/ui/codicon'
 import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
 
-export type IdePanel = 'files' | 'git' | 'github' | 'search'
+export type IdePanel = 'extensions' | 'files' | 'git' | 'github' | 'run' | 'search'
 
-const PANELS: { icon: string; id: IdePanel; label: 'files' | 'git' | 'github' | 'search' }[] = [
+const PANELS: { icon: string; id: IdePanel; label: 'extensions' | 'files' | 'git' | 'github' | 'run' | 'search' }[] = [
   { icon: 'files', id: 'files', label: 'files' },
   { icon: 'search', id: 'search', label: 'search' },
   { icon: 'source-control', id: 'git', label: 'git' },
-  { icon: 'github', id: 'github', label: 'github' }
+  { icon: 'github', id: 'github', label: 'github' },
+  { icon: 'debug-alt', id: 'run', label: 'run' },
+  { icon: 'extensions', id: 'extensions', label: 'extensions' }
 ]
 
 /** VS Code activity bar. The active icon shows a marker, and clicking it

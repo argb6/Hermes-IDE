@@ -11,6 +11,7 @@ import type { UpdateHoldWire } from '../electron/update-hold-types'
 import type { UpdateRunReport } from '../electron/updater/update-metrics'
 import type { GrowRequest } from '../electron/window-growth'
 
+import type { DapBridge, ExtBridge, LspBridge, SearchBridge } from './app/ide/ipc-types'
 import type { WakeIndicatorState } from './lib/wake-indicator'
 import type {
   QuickEntryStatePush,
@@ -666,6 +667,14 @@ declare global {
       // renderer can still open the FindBar when the OS compositor has
       // already grabbed the chord (#81727, e.g. Pop!_OS / GNOME).
       onOpenFindBarRequested: (callback: () => void) => () => void
+      /** Workspace search. Ripgrep runs in the Electron main process. */
+      search?: SearchBridge
+      /** Language server bridge. Missing or `unavailable` must not interrupt editing. */
+      lsp?: LspBridge
+      /** Debug adapter bridge (debugpy / js-debug). */
+      dap?: DapBridge
+      /** Open VSX declarative extensions. Not the Microsoft Marketplace. */
+      ext?: ExtBridge
     }
   }
 }
