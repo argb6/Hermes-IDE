@@ -23,6 +23,7 @@ const launchFlags: { localModels?: boolean; guestOnboarding?: boolean } | undefi
 const localSkin = ipcRenderer.sendSync('hermes:skin:local')
 
 import { unwrapExpectedNotFound } from './api-expected-404'
+import type { DapBridge, ExtBridge, LspBridge } from './ide/contract'
 
 contextBridge.exposeInMainWorld('hermesDesktop', {
   glassSupported: translucencySupport?.glass === true,
@@ -679,5 +680,59 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
     ipcRenderer.on('hermes:open-find-bar', listener)
 
     return () => ipcRenderer.removeListener('hermes:open-find-bar', listener)
-  }
+  },
+  // Workspace search runs ripgrep in this process. Code intelligence,
+  // debug adapters, and declarative extensions are the backend bridge
+  // (electron/ide/IPC.md). Failures resolve as a status; they don't reject.
+  search: {
+    start: request => ipcRenderer.invoke('hermes:search:start', request),
+    cancel: id => ipcRenderer.invoke('hermes:search:cancel', id),
+    replace: request => ipcRenderer.invoke('hermes:search:replace', request),
+    onEvent: callback => {
+      const listener = (_event, payload) => callback(payload)
+      ipcRenderer.on('hermes:search:event', listener)
+
+      return () => ipcRenderer.removeListener('hermes:search:event', listener)
+    }
+  },
+  // Same string as `pathToFileUri` in electron/ide/lsp/manager.ts. Sync because
+  // Monaco builds the model URI during render; preload cannot import node:path.
+  pathToFileUri: (filePath: string) => {
+    const value = ipcRenderer.sendSync('hermes:lsp-file-uri', filePath)
+
+    return typeof value === 'string' ? value : ''
+  },
+  lsp: {
+    start: request => ipcRenderer.invoke('lsp:start', request),
+    stop: request => ipcRenderer.invoke('lsp:stop', request),
+    didOpen: request => ipcRenderer.invoke('lsp:didOpen', request),
+    didChange: request => ipcRenderer.invoke('lsp:didChange', request),
+    didClose: request => ipcRenderer.invoke('lsp:didClose', request),
+    request: request => ipcRenderer.invoke('lsp:request', request),
+    status: query => ipcRenderer.invoke('lsp:status', query),
+    onDiagnostics: callback => {
+      const listener = (_event, payload) => callback(payload)
+      ipcRenderer.on('lsp:diagnostics', listener)
+
+      return () => ipcRenderer.removeListener('lsp:diagnostics', listener)
+    }
+  } satisfies LspBridge,
+  dap: {
+    start: request => ipcRenderer.invoke('dap:start', request),
+    send: request => ipcRenderer.invoke('dap:send', request),
+    stop: request => ipcRenderer.invoke('dap:stop', request),
+    status: () => ipcRenderer.invoke('dap:status'),
+    onEvent: callback => {
+      const listener = (_event, payload) => callback(payload)
+      ipcRenderer.on('dap:event', listener)
+
+      return () => ipcRenderer.removeListener('dap:event', listener)
+    }
+  } satisfies DapBridge,
+  ext: {
+    search: query => ipcRenderer.invoke('ext:search', query),
+    install: request => ipcRenderer.invoke('ext:install', request),
+    uninstall: request => ipcRenderer.invoke('ext:uninstall', request),
+    list: () => ipcRenderer.invoke('ext:list')
+  } satisfies ExtBridge
 })

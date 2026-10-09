@@ -971,7 +971,7 @@ async function fileConflictSides(repoPath, filePath, gitBin) {
     let result = ''
 
     try {
-      result = await fs.promises.readFile(path.isAbsolute(filePath) ? filePath : path.join(cwd, rel), 'utf8')
+      result = await fs.readFile(path.isAbsolute(filePath) ? filePath : path.join(cwd, rel), 'utf8')
     } catch {
       result = ''
     }
