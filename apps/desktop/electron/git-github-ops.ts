@@ -18,7 +18,7 @@ function ghEnv(ghBin) {
   return { ...process.env, PATH: [...extra, process.env.PATH].filter(Boolean).join(path.delimiter) }
 }
 
-function runGh(args, cwd, ghBin, timeoutMs = GH_TIMEOUT_MS) {
+function runGh(args, cwd, ghBin, timeoutMs = GH_TIMEOUT_MS): Promise<{ ok: boolean; stderr: string; stdout: string }> {
   return new Promise(resolve => {
     execFile(
       ghBin || 'gh',

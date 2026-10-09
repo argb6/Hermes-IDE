@@ -307,6 +307,7 @@ test('channel stamps verify the real checkout and retain source version and nati
       { provider: 'generic', url: `${receiver.publicBase}/releases/darwin/stable/`, channel: 'stable' }
     ])
 
+    const bundleSmokeSpecifier: string = '../../../tests/install/e2e-assets/bundle-smoke-metadata.mjs'
     const {
       verifyBundleStamp
     }: {
@@ -318,7 +319,7 @@ test('channel stamps verify the real checkout and retain source version and nati
           channelRequest: ChannelBuildRequest
         }
       ) => string
-    } = await import('../../../tests/install/e2e-assets/bundle-smoke-metadata.mjs')
+    } = await import(bundleSmokeSpecifier)
 
     assert.equal(
       verifyBundleStamp(stable, { commit: receiver.commit, platform: 'darwin', channelRequest: receiver }),

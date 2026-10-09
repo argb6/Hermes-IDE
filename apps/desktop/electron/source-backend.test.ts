@@ -5,7 +5,6 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, vi } from 'vitest'
-import WebSocket from 'ws'
 
 import { serveBackendArgs } from './backend-command'
 import { waitForDashboardPort } from './backend-ready'
@@ -37,7 +36,7 @@ async function stop(child: ChildProcess): Promise<void> {
 }
 
 async function ping(port: number, token: string): Promise<unknown> {
-  const socket: WebSocket = new WebSocket(`ws://127.0.0.1:${port}/api/ws?token=${token}`)
+  const socket = new WebSocket(`ws://127.0.0.1:${port}/api/ws?token=${token}`)
 
   try {
     return await new Promise<unknown>((resolve: (value: unknown) => void, reject: (error: Error) => void): void => {
@@ -45,15 +44,15 @@ async function ping(port: number, token: string): Promise<unknown> {
         reject(new Error('RPC timed out'))
       }, 15_000)
 
-      socket.once('error', (error: Error): void => {
+      socket.addEventListener('error', (): void => {
         clearTimeout(timer)
-        reject(error)
+        reject(new Error('socket error'))
       })
-      socket.once('open', (): void => {
+      socket.addEventListener('open', (): void => {
         socket.send(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping', params: {} }))
       })
-      socket.on('message', (data: WebSocket.RawData): void => {
-        const response: { id?: number; result?: unknown; error?: unknown } = JSON.parse(data.toString())
+      socket.addEventListener('message', (event: MessageEvent): void => {
+        const response: { id?: number; result?: unknown; error?: unknown } = JSON.parse(String(event.data))
 
         if (response.id === 1) {
           clearTimeout(timer)
@@ -62,7 +61,7 @@ async function ping(port: number, token: string): Promise<unknown> {
       })
     })
   } finally {
-    socket.terminate()
+    socket.close()
   }
 }
 

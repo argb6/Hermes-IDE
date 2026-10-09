@@ -14,8 +14,10 @@ import { notifyWorkspaceChanged } from '@/store/workspace-events'
 import { setWorkspaceMode } from '@/store/workspace-mode'
 
 import { runIdeCommand } from './ide-commands'
-import { requestIdeSave } from './ide-editor'
+import { debugContinue, debugRestart, debugStart, debugStep, debugStop } from './ide-debug-session'
+import { $ideEditor, requestIdeSave } from './ide-editor'
 import {
+  editorAllOccurrences,
   editorClipboard,
   editorCopyLineDown,
   editorCopyLineUp,
@@ -23,17 +25,28 @@ import {
   editorCursorBelow,
   editorExpandSelection,
   editorFind,
+  editorFindReferences,
+  editorFormatDocument,
+  editorGoToDefinition,
   editorGotoLine,
   editorMatchingBracket,
   editorMoveLineDown,
   editorMoveLineUp,
+  editorNextOccurrence,
+  editorNextProblem,
+  editorPrevOccurrence,
+  editorPrevProblem,
   editorRedo,
   editorReplace,
   editorSelectAll,
   editorToggleBlockComment,
+  editorToggleBreakpoint,
+  editorToggleColumnSelection,
   editorToggleComment,
+  editorToggleWordWrap,
   editorUndo
 } from './ide-editor-actions'
+import { clearIdeBreakpoints, setAllBreakpointsEnabled, toggleIdeBreakpoint } from './ide-state'
 import { $ideTimeline, ideBack, ideForward, requestIdeOpen, requestIdeQuickOpen } from './ide-nav'
 
 type Row = { id: string; enabled: boolean; shortcut?: string }
@@ -82,10 +95,11 @@ const EDIT: Array<Row | 'sep'> = [
   { id: 'edit.replace', enabled: true },
   'sep',
   { id: 'edit.findFiles', enabled: true },
-  { id: 'edit.replaceFiles', enabled: false },
+  { id: 'edit.replaceFiles', enabled: true },
   'sep',
   { id: 'edit.comment', enabled: true, shortcut: 'Ctrl+/' },
   { id: 'edit.blockComment', enabled: true, shortcut: 'Shift+Alt+A' },
+  { id: 'edit.format', enabled: true, shortcut: 'Shift+Alt+F' },
   { id: 'edit.emmet', enabled: false }
 ]
 
@@ -103,12 +117,12 @@ const SELECTION: Array<Row | 'sep'> = [
   { id: 'selection.cursorAbove', enabled: true, shortcut: 'Ctrl+Alt+Up' },
   { id: 'selection.cursorBelow', enabled: true, shortcut: 'Ctrl+Alt+Down' },
   { id: 'selection.lineEnds', enabled: false },
-  { id: 'selection.nextOccurrence', enabled: false },
-  { id: 'selection.prevOccurrence', enabled: false },
-  { id: 'selection.allOccurrences', enabled: false },
+  { id: 'selection.nextOccurrence', enabled: true },
+  { id: 'selection.prevOccurrence', enabled: true },
+  { id: 'selection.allOccurrences', enabled: true },
   'sep',
   { id: 'selection.ctrlClick', enabled: false },
-  { id: 'selection.column', enabled: false }
+  { id: 'selection.column', enabled: true }
 ]
 
 const VIEW: Array<Row | 'sep'> = [
@@ -121,15 +135,15 @@ const VIEW: Array<Row | 'sep'> = [
   { id: 'view.files', enabled: true },
   { id: 'view.search', enabled: true },
   { id: 'view.git', enabled: true },
-  { id: 'view.run', enabled: false },
-  { id: 'view.extensions', enabled: false },
+  { id: 'view.run', enabled: true },
+  { id: 'view.extensions', enabled: true },
   'sep',
   { id: 'view.problems', enabled: true },
   { id: 'view.output', enabled: true },
   { id: 'view.debug', enabled: true },
   { id: 'view.terminal', enabled: true },
   'sep',
-  { id: 'view.wordWrap', enabled: false }
+  { id: 'view.wordWrap', enabled: true }
 ]
 
 const GO: Array<Row | 'sep'> = [
@@ -144,39 +158,39 @@ const GO: Array<Row | 'sep'> = [
   { id: 'go.symbolWorkspace', enabled: false },
   'sep',
   { id: 'go.symbolEditor', enabled: false },
-  { id: 'go.definition', enabled: false },
+  { id: 'go.definition', enabled: true },
   { id: 'go.declaration', enabled: false },
   { id: 'go.type', enabled: false },
   { id: 'go.implementations', enabled: false },
   { id: 'go.symbolChat', enabled: false },
-  { id: 'go.references', enabled: false },
+  { id: 'go.references', enabled: true },
   { id: 'go.symbolNewChat', enabled: false },
   'sep',
   { id: 'go.line', enabled: true },
   { id: 'go.bracket', enabled: true },
   'sep',
-  { id: 'go.nextProblem', enabled: false },
-  { id: 'go.prevProblem', enabled: false },
+  { id: 'go.nextProblem', enabled: true },
+  { id: 'go.prevProblem', enabled: true },
   { id: 'go.nextChange', enabled: false },
   { id: 'go.prevChange', enabled: false }
 ]
 
 const RUN: Row[] = [
-  { id: 'run.start', enabled: false },
-  { id: 'run.without', enabled: false },
-  { id: 'run.stop', enabled: false },
-  { id: 'run.restart', enabled: false },
+  { id: 'run.start', enabled: true },
+  { id: 'run.without', enabled: true },
+  { id: 'run.stop', enabled: true },
+  { id: 'run.restart', enabled: true },
   { id: 'run.configurations', enabled: false },
   { id: 'run.addConfig', enabled: false },
-  { id: 'run.stepOver', enabled: false },
-  { id: 'run.stepInto', enabled: false },
-  { id: 'run.stepOut', enabled: false },
-  { id: 'run.continue', enabled: false },
-  { id: 'run.breakpoint', enabled: false },
-  { id: 'run.newBreakpoint', enabled: false },
-  { id: 'run.enableBreakpoints', enabled: false },
-  { id: 'run.disableBreakpoints', enabled: false },
-  { id: 'run.removeBreakpoints', enabled: false },
+  { id: 'run.stepOver', enabled: true },
+  { id: 'run.stepInto', enabled: true },
+  { id: 'run.stepOut', enabled: true },
+  { id: 'run.continue', enabled: true },
+  { id: 'run.breakpoint', enabled: true },
+  { id: 'run.newBreakpoint', enabled: true },
+  { id: 'run.enableBreakpoints', enabled: true },
+  { id: 'run.disableBreakpoints', enabled: true },
+  { id: 'run.removeBreakpoints', enabled: true },
   { id: 'run.installDebuggers', enabled: false }
 ]
 
@@ -228,9 +242,7 @@ function fileName(path: string) {
   return path.split(/[\\/]/).filter(Boolean).pop() || path
 }
 
-/** Title-bar menus. Grey rows are visible so the layout matches a code editor,
- *  and they do nothing because Hermes has no debugger, language service, or
- *  extension market behind them. */
+/** Title-bar menus. Grey rows stay visible for commands that still have no backend. */
 export function IdeMenuBar() {
   const { t } = useI18n()
   const navigate = useNavigate()
@@ -370,6 +382,12 @@ export function IdeMenuBar() {
       case 'view.search':
         runIdeCommand('view.search')
         break
+      case 'edit.replaceFiles':
+        runIdeCommand('edit.replaceFiles')
+        break
+      case 'edit.format':
+        editorFormatDocument()
+        break
       case 'edit.comment':
         editorToggleComment()
         break
@@ -400,6 +418,18 @@ export function IdeMenuBar() {
       case 'selection.cursorBelow':
         editorCursorBelow()
         break
+      case 'selection.nextOccurrence':
+        editorNextOccurrence()
+        break
+      case 'selection.prevOccurrence':
+        editorPrevOccurrence()
+        break
+      case 'selection.allOccurrences':
+        editorAllOccurrences()
+        break
+      case 'selection.column':
+        editorToggleColumnSelection()
+        break
       case 'view.command':
       case 'help.commands':
         openCommandPalette()
@@ -409,6 +439,15 @@ export function IdeMenuBar() {
         break
       case 'view.git':
         runIdeCommand('view.git')
+        break
+      case 'view.run':
+        runIdeCommand('view.run')
+        break
+      case 'view.extensions':
+        runIdeCommand('view.extensions')
+        break
+      case 'view.wordWrap':
+        editorToggleWordWrap()
         break
       case 'view.problems':
         runIdeCommand('view.problems')
@@ -434,6 +473,18 @@ export function IdeMenuBar() {
       case 'go.file':
         requestIdeQuickOpen()
         break
+      case 'go.definition':
+        editorGoToDefinition()
+        break
+      case 'go.references':
+        editorFindReferences()
+        break
+      case 'go.nextProblem':
+        editorNextProblem()
+        break
+      case 'go.prevProblem':
+        editorPrevProblem()
+        break
       case 'go.line': {
         const line = Number(ask(t.ide.menu.prompts.line))
 
@@ -444,6 +495,51 @@ export function IdeMenuBar() {
       }
       case 'go.bracket':
         editorMatchingBracket()
+        break
+      case 'run.start':
+        void debugStart(false)
+        break
+      case 'run.without':
+        void debugStart(true)
+        break
+      case 'run.stop':
+        void debugStop()
+        break
+      case 'run.restart':
+        void debugRestart()
+        break
+      case 'run.continue':
+        void debugContinue()
+        break
+      case 'run.stepOver':
+        void debugStep('next')
+        break
+      case 'run.stepInto':
+        void debugStep('stepIn')
+        break
+      case 'run.stepOut':
+        void debugStep('stepOut')
+        break
+      case 'run.breakpoint':
+        editorToggleBreakpoint()
+        break
+      case 'run.newBreakpoint': {
+        const editor = $ideEditor.get()
+        const condition = ask(t.ide.breakpointCondition)
+
+        if (editor && condition) {
+          toggleIdeBreakpoint(editor.path, editor.line, condition)
+        }
+        break
+      }
+      case 'run.enableBreakpoints':
+        setAllBreakpointsEnabled(true)
+        break
+      case 'run.disableBreakpoints':
+        setAllBreakpointsEnabled(false)
+        break
+      case 'run.removeBreakpoints':
+        clearIdeBreakpoints()
         break
       case 'help.issue':
         openLink('https://github.com/NousResearch/hermes-agent/issues')

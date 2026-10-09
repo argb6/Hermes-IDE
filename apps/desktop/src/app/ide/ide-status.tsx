@@ -8,6 +8,7 @@ import { $repoStatusByCwd, registerRepoStatusCwd } from '@/store/coding-status'
 
 import { IdeCheckout } from './ide-checkout'
 import { $ideEditor } from './ide-editor'
+import { $ideDiagnostics, $lspStatus } from './ide-state'
 import { $fileEncoding, encodingLabel, FILE_ENCODINGS, setFileEncoding } from './ide-encoding'
 
 /** Bottom status row: branch, problem counts, and the terminal button.
@@ -29,6 +30,8 @@ export function IdeStatusBar({
   const byCwd = useStore($repoStatusByCwd)
   const encoding = useStore($fileEncoding)
   const editor = useStore($ideEditor)
+  const lsp = useStore($lspStatus)
+  const diagnostics = useStore($ideDiagnostics)
   const [encodings, setEncodings] = useState(false)
   const [checkout, setCheckout] = useState(false)
   const status = cwd ? (byCwd[cwd] ?? null) : null
@@ -52,12 +55,13 @@ export function IdeStatusBar({
       {folder && <span className="max-w-40 truncate">{folder}</span>}
       <button className="flex items-center gap-1 hover:text-foreground" onClick={onOpenProblems} type="button">
         <Codicon name="error" size={14} />
-        {status?.conflicted ?? 0}
+        {diagnostics.filter(item => item.severity !== 2).length || status?.conflicted || 0}
       </button>
       <button className="flex items-center gap-1 hover:text-foreground" onClick={onOpenProblems} type="button">
         <Codicon name="warning" size={14} />
         {status?.unstaged ?? 0}
       </button>
+      <LspIndicator lsp={lsp} />
       <div className="flex-1" />
       {editor && (
         <span>
@@ -100,5 +104,26 @@ export function IdeStatusBar({
         <Codicon name="terminal" size={14} />
       </button>
     </div>
+  )
+}
+
+function LspIndicator({ lsp }: { lsp: Record<string, 'crashed' | 'downloading' | 'ready' | 'unavailable'> }) {
+  const { t } = useI18n()
+  const label = {
+    crashed: t.ide.lspCrashed,
+    downloading: t.ide.lspDownloading,
+    ready: t.ide.lspReady,
+    unavailable: t.ide.lspOffline
+  }
+  const rows = Object.entries(lsp)
+
+  if (rows.length === 0) {
+    return null
+  }
+
+  return (
+    <span className="max-w-48 truncate text-[11px]" title={rows.map(([language, state]) => `${language} ${label[state]}`).join(', ')}>
+      {rows.map(([language, state]) => `${language}: ${label[state]}`).join(' · ')}
+    </span>
   )
 }

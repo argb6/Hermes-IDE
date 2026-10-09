@@ -18,7 +18,9 @@ import { Codicon } from '@/components/ui/codicon'
 import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
 
+import { IdeDebugConsole } from './ide-debug'
 import { $ideOutput, clearIdeOutput } from './ide-output'
+import { IdeProblems } from './ide-problems'
 import { $ideShell, IDE_SHELLS, type IdeShell, setIdeShell } from './ide-shells'
 
 const TABS = ['problems', 'output', 'debug', 'terminal', 'ports'] as const
@@ -354,9 +356,9 @@ export function IdePanel({
           </pre>
         </div>
       )}
-      {shownTab !== 'terminal' && shownTab !== 'output' && (
-        <p className="px-3 py-2 text-xs text-muted-foreground">{empty[shownTab]}</p>
-      )}
+      {shownTab === 'problems' && <IdeProblems />}
+      {shownTab === 'debug' && <IdeDebugConsole />}
+      {shownTab === 'ports' && <p className="px-3 py-2 text-xs text-muted-foreground">{empty.ports}</p>}
     </div>
   )
 }

@@ -724,6 +724,54 @@ export interface Translations {
     modified: string
     untracked: string
     conflict: string
+    run: string
+    extensions: string
+    searchRegex: string
+    searchCase: string
+    searchWord: string
+    searchInclude: string
+    searchExclude: string
+    searchReplace: string
+    searchReplaceAll: string
+    searchReplaceConfirm: (count: number) => string
+    searchMatches: (count: number) => string
+    searchRunning: string
+    searchFailed: string
+    searchUnavailable: string
+    wordWrap: string
+    formatDocument: string
+    lspOffline: string
+    lspDownloading: string
+    lspReady: string
+    lspCrashed: string
+    problemsError: string
+    problemsWarn: string
+    debugStart: string
+    debugPause: string
+    debugContinue: string
+    debugStepOver: string
+    debugStepInto: string
+    debugStepOut: string
+    debugRestart: string
+    debugStop: string
+    debugVariables: string
+    debugCallStack: string
+    debugWatch: string
+    debugWatchPlaceholder: string
+    debugBreakpoints: string
+    debugNoSession: string
+    debugUnavailable: string
+    debugNeedFile: string
+    breakpointCondition: string
+    debugConsolePlaceholder: string
+    extensionsSearch: string
+    extensionsEmpty: string
+    extensionsInstalled: string
+    extensionsInstall: string
+    extensionsUninstall: string
+    extensionsUnavailable: string
+    extensionsDeclarative: string
+    extensionsRejected: string
     menu: {
       file: string
       edit: string

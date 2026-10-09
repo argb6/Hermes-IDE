@@ -3,6 +3,7 @@ import type { HermesSkin } from '@hermes/shared/skin'
 import type { TranslucencyState } from '@hermes/shared/translucency'
 
 import type { ScreenshotApi } from '../electron/command-screenshot-types'
+import type { DapBridge, ExtBridge, LspBridge } from '../electron/ide/contract'
 import type { MachineProfile } from '../electron/machine-profile'
 import type { HermesNotification } from '../electron/notification-types'
 import type { PoolLimits } from '../electron/pool-limits'
@@ -11,6 +12,7 @@ import type { UpdateHoldWire } from '../electron/update-hold-types'
 import type { UpdateRunReport } from '../electron/updater/update-metrics'
 import type { GrowRequest } from '../electron/window-growth'
 
+import type { SearchBridge } from './app/ide/ipc-types'
 import type { WakeIndicatorState } from './lib/wake-indicator'
 import type {
   QuickEntryStatePush,
@@ -654,6 +656,14 @@ declare global {
         // returns the most-installed themes.
         searchMarketplace: (query: string) => Promise<DesktopMarketplaceSearchItem[]>
       }
+      // Language servers, debug adapters, and Open VSX declarative extensions.
+      // Main process owns the processes. Contract: electron/ide/IPC.md.
+      // `pathToFileUri` is the manager helper. Document URIs must use it so an
+      // agent didOpen sees the buffer the editor already has.
+      pathToFileUri?: (filePath: string) => string
+      lsp: LspBridge
+      dap: DapBridge
+      ext: ExtBridge
       // Find-in-page: delegates to Electron's webContents.findInPage on the
       // IPC sender's window so Cmd+F from a secondary session window
       // searches that window (not the primary). `onFoundInPage` returns the
@@ -666,6 +676,8 @@ declare global {
       // renderer can still open the FindBar when the OS compositor has
       // already grabbed the chord (#81727, e.g. Pop!_OS / GNOME).
       onOpenFindBarRequested: (callback: () => void) => () => void
+      /** Workspace search. Ripgrep runs in the Electron main process. */
+      search?: SearchBridge
     }
   }
 }

@@ -121,7 +121,19 @@ module.exports = {
     // Temporary alternate dir while a live Hermes holds release\win-unpacked.
     output: process.env.HERMES_DESKTOP_RELEASE_DIR || 'release'
   },
-  files: ['dist/**', 'assets/**', 'public/**', 'package.json'],
+  // Whitelist. Production node_modules are not copied unless named here.
+  // @vscode/ripgrep@1.18.0 (PR #5) is external in the main bundle. Its rg.exe
+  // lives in the optional package @vscode/ripgrep-<platform>-<arch> (published
+  // tarball, no postinstall download). Windows x64 CI gets
+  // @vscode/ripgrep-win32-x64 from npm; do not omit optional dependencies.
+  files: [
+    'dist/**',
+    'assets/**',
+    'public/**',
+    'package.json',
+    'node_modules/@vscode/ripgrep/**/*',
+    'node_modules/@vscode/ripgrep-*/**/*'
+  ],
   beforeBuild: channelRequest ? async () => {
     await require(path.join(__dirname, 'scripts/before-build.mjs')).default()
     stageChannelManifest(__dirname, channelRequest)
@@ -148,7 +160,17 @@ module.exports = {
     }
   ],
   asar: {
-    unpack: ['**/*.node', '**/prebuilds/**', 'dist/**']
+    // Platform ripgrep packages unpack to
+    // resources/app.asar.unpacked/node_modules/@vscode/ripgrep-<platform>-<arch>/
+    // so Windows x64 can spawn bin/rg.exe. The meta package stays in app.asar
+    // (require.resolve reads JS from the archive). PR #5's unpackAsarPath
+    // rewrites app.asar + separator to app.asar.unpacked.
+    unpack: [
+      '**/*.node',
+      '**/prebuilds/**',
+      'dist/**',
+      '**/node_modules/@vscode/ripgrep-*/**/*'
+    ]
   },
   mac: {
     // macOS 26 masks every icon into its own squircle: the layered Icon
@@ -265,6 +287,11 @@ module.exports = {
     createStartMenuShortcut: true,
     shortcutName: displayName,
     installerLanguages: ['zh_CN', 'en_US'],
+    include: 'assets/installer-user-data.nsh',
+    // Must stay false. The built-in flag deletes $APPDATA\${APP_FILENAME}
+    // (roaming), and a silent /S uninstall — including electron-updater's
+    // upgrade — must not delete anything under %LOCALAPPDATA%\hermes.
+    // Opt-in removal of that folder is assets/installer-user-data.nsh.
     deleteAppDataOnUninstall: false,
     runAfterFinish: true,
     menuCategory: false
