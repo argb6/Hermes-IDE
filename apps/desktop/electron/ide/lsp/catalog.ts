@@ -50,3 +50,27 @@ const LANGUAGE_SERVER: Record<string, LspServerId> = {
 export function serverIdForLanguage(language: string): LspServerId | null {
   return LANGUAGE_SERVER[language] ?? null
 }
+
+const EXTENSION_LANGUAGE: Record<string, string> = {
+  '.py': 'python',
+  '.pyi': 'python',
+  '.ts': 'typescript',
+  '.tsx': 'typescriptreact',
+  '.mts': 'typescript',
+  '.cts': 'typescript',
+  '.js': 'javascript',
+  '.jsx': 'javascriptreact',
+  '.mjs': 'javascript',
+  '.cjs': 'javascript'
+}
+
+export function languageIdForPath(filePath: string): string | null {
+  const dot = filePath.lastIndexOf('.')
+  const slash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'))
+
+  if (dot <= slash) {
+    return null
+  }
+
+  return EXTENSION_LANGUAGE[filePath.slice(dot).toLowerCase()] ?? null
+}

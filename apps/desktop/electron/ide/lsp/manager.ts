@@ -21,7 +21,7 @@ import type {
   LspStopRequest,
   LspSyncResult
 } from '../contract'
-import { resolveRuntimeDir } from '../paths'
+import { isInsideDir, resolveRuntimeDir } from '../paths'
 import { electronNodeEnv, spawnStdio, type SpawnRequest } from '../spawn'
 import { answerServerRequest, StdioRpc, type StdioPeer } from '../stdio-rpc'
 import { PYRIGHT_VERSION, serverIdForLanguage, TYPESCRIPT_LANGUAGE_SERVER_VERSION, type LspServerId } from './catalog'
@@ -56,6 +56,8 @@ interface Session {
   rpc?: StdioRpc
   timer?: { cancel: () => void }
   documents: Map<string, string>
+  diagnostics: Map<string, unknown[]>
+  diagnosticWaiters: Map<string, Array<(diagnostics: unknown[]) => void>>
   start?: Promise<LspStartResult>
 }
 
@@ -230,7 +232,9 @@ export class LspManager {
       restarts: 0,
       stopped: false,
       generation: 0,
-      documents: new Map()
+      documents: new Map(),
+      diagnostics: new Map(),
+      diagnosticWaiters: new Map()
     }
 
     this.sessions.set(key, session)
@@ -336,11 +340,15 @@ export class LspManager {
 
     const language = session.documents.get(uri) || (session.serverId === 'pyright' ? 'python' : 'typescript')
 
+    const diagnostics = Array.isArray(body.diagnostics) ? body.diagnostics : []
+
+    session.diagnostics.set(uri, diagnostics)
+    this.flushDiagnosticWaiters(session, uri, diagnostics)
     this.deps.onDiagnostics?.({
       language,
       workspaceRoot: session.workspaceRoot,
       uri,
-      diagnostics: Array.isArray(body.diagnostics) ? body.diagnostics : []
+      diagnostics
     })
   }
 
@@ -390,6 +398,7 @@ export class LspManager {
     session.generation += 1
     session.rpc?.dispose()
     session.rpc = undefined
+    this.failDiagnosticWaiters(session)
     session.status = 'unavailable'
     session.reason = 'stopped'
     this.sessions.delete(session.key)
@@ -431,6 +440,82 @@ export class LspManager {
       status: session.status,
       ...(session.reason ? { reason: session.reason } : {}),
       workspaceRoot: session.workspaceRoot
+    }
+  }
+
+  tracksDocument(language: string, workspaceRoot: string, uri: string): boolean {
+    return this.sessionFor(language, workspaceRoot)?.documents.has(uri) === true
+  }
+
+  /** Ready server whose workspace already contains `filePath`, nearest root first. */
+  readyWorkspaceFor(language: string, filePath: string): string | null {
+    const serverId = serverIdForLanguage(language)
+
+    if (!serverId) {
+      return null
+    }
+
+    const file = path.resolve(filePath)
+    const matches = [...this.sessions.values()].filter(
+      session =>
+        session.serverId === serverId &&
+        session.status === 'ready' &&
+        isInsideDir(file, session.workspaceRoot, this.deps.platform)
+    )
+
+    matches.sort((left, right) => right.workspaceRoot.length - left.workspaceRoot.length)
+
+    return matches[0]?.workspaceRoot ?? null
+  }
+
+  waitForDiagnostics(language: string, workspaceRoot: string, uri: string, timeoutMs: number): Promise<unknown[]> {
+    const session = this.sessionFor(language, workspaceRoot)
+    const cached = session?.diagnostics.get(uri)
+
+    if (cached) {
+      return Promise.resolve(cached)
+    }
+
+    if (!session) {
+      return Promise.resolve([])
+    }
+
+    return new Promise(resolve => {
+      let settled = false
+      const finish = (diagnostics: unknown[]) => {
+        if (settled) {
+          return
+        }
+
+        settled = true
+        clearTimeout(timer)
+        resolve(diagnostics)
+      }
+      const timer = setTimeout(() => finish(session.diagnostics.get(uri) ?? []), Math.max(0, timeoutMs))
+      const waiters = session.diagnosticWaiters.get(uri) ?? []
+
+      waiters.push(finish)
+      session.diagnosticWaiters.set(uri, waiters)
+    })
+  }
+
+  private flushDiagnosticWaiters(session: Session, uri: string, diagnostics: unknown[]): void {
+    const waiters = session.diagnosticWaiters.get(uri) ?? []
+
+    session.diagnosticWaiters.delete(uri)
+
+    for (const waiter of waiters) {
+      waiter(diagnostics)
+    }
+  }
+
+  private failDiagnosticWaiters(session: Session): void {
+    for (const [uri, waiters] of [...session.diagnosticWaiters.entries()]) {
+      session.diagnosticWaiters.delete(uri)
+
+      for (const waiter of waiters) {
+        waiter(session.diagnostics.get(uri) ?? [])
+      }
     }
   }
 
@@ -505,7 +590,7 @@ function initializeParams(session: Session, pythonPath: string | null | undefine
   }
 }
 
-function pathToFileUri(filePath: string): string {
+export function pathToFileUri(filePath: string): string {
   const resolved = path.resolve(filePath)
   const prefix = process.platform === 'win32' ? `file:///${resolved.replace(/\\/g, '/')}` : `file://${resolved}`
 

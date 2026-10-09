@@ -266,6 +266,7 @@ import {
 } from './find-in-page'
 import { createFirstRunSetupGate } from './first-run-setup-gate'
 import { registerFsIpc } from './fs-ipc'
+import { ideBridgeChildEnv } from './ide/bridge'
 import { registerIdeIpc } from './ide/ipc'
 import { decodeFileBytes } from './text-encoding'
 import type {
@@ -12301,7 +12302,8 @@ async function runPoolBackendStart(
           // optional marker probe fails, retain legacy PID-only tracking.
           ...parentIdentityEnv,
           HERMES_WEB_DIST: webDist,
-          ...(readyFile ? { HERMES_DESKTOP_READY_FILE: readyFile } : {})
+          ...(readyFile ? { HERMES_DESKTOP_READY_FILE: readyFile } : {}),
+          ...ideBridgeChildEnv()
         },
         GUEST_ONBOARDING
       ),
@@ -13222,7 +13224,8 @@ async function runHermesStart({ supervisorRecovery = false }: { supervisorRecove
             // optional marker probe fails, retain legacy PID-only tracking.
             ...parentIdentityEnv,
             HERMES_WEB_DIST: webDist,
-            ...(readyFile ? { HERMES_DESKTOP_READY_FILE: readyFile } : {})
+            ...(readyFile ? { HERMES_DESKTOP_READY_FILE: readyFile } : {}),
+            ...ideBridgeChildEnv()
           },
           GUEST_ONBOARDING
         ),
