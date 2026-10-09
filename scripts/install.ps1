@@ -897,17 +897,24 @@ function Stage-Repository {
     } else {
         # Moving a clone onto an existing directory would nest it. The
         # preflight above already refused nonempty or linked destinations.
-        if (Test-Path -LiteralPath $InstallDir) {
-            Remove-Item -LiteralPath $InstallDir -Force
-        }
         $parent = Split-Path $InstallDir
         New-Item -ItemType Directory -Force -Path $parent | Out-Null
-        # Clone into a sibling staging dir and publish only a complete,
-        # materialized checkout: a clone that dies half-way must not leave a
-        # .git behind that the next rerun would try to update.
-        $staged = Join-Path $parent ".hermes-clone-$PID-$(Get-Random)"
-        $tree = Join-Path $staged "tree"
-        New-Item -ItemType Directory -Force -Path $staged | Out-Null
+        # An empty InstallDir may still be locked (IDE cwd, indexers). git clone
+        # accepts an empty destination, so clone in place instead of
+        # Delete+Move — Remove-Item raises a locale-encoded sharing violation
+        # that the desktop UI shows as mojibake.
+        $cloneIntoPlace = Test-Path -LiteralPath $InstallDir
+        $staged = $null
+        if ($cloneIntoPlace) {
+            $tree = $InstallDir
+        } else {
+            # Clone into a sibling staging dir and publish only a complete,
+            # materialized checkout: a clone that dies half-way must not leave a
+            # .git behind that the next rerun would try to update.
+            $staged = Join-Path $parent ".hermes-clone-$PID-$(Get-Random)"
+            $tree = Join-Path $staged "tree"
+            New-Item -ItemType Directory -Force -Path $staged | Out-Null
+        }
         # Phase lines ("Receiving objects: 42%") feed the status line; git
         # prints none to a pipe unless asked.
         $progress = @()
@@ -925,12 +932,18 @@ function Stage-Repository {
                 Invoke-Logged $cloneLabel { git clone @progress --filter=blob:none --branch $Branch $RepoUrl $tree }
                 if (-not $LASTEXITCODE) { $cloned = $true; break }
                 Remove-Item -LiteralPath $tree -Recurse -Force -ErrorAction SilentlyContinue
+                if ($cloneIntoPlace -and -not (Test-Path -LiteralPath $InstallDir)) {
+                    New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+                }
                 if ($attempt -lt 3) { Start-Sleep -Seconds ($attempt * 5) }
             }
             if (-not $cloned) {
                 # The checkout step is where throttled downloads die: clone the
                 # graph alone, then retry materializing the tree separately.
                 Write-Warn "direct clone failed; trying deferred checkout"
+                if ($cloneIntoPlace -and -not (Test-Path -LiteralPath $InstallDir)) {
+                    New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+                }
                 Invoke-Logged "Cloning history" { git clone @progress --filter=blob:none --no-checkout --branch $Branch $RepoUrl $tree }
                 if (-not $LASTEXITCODE) {
                     foreach ($attempt in 1..2) {
@@ -941,11 +954,15 @@ function Stage-Repository {
                 }
             }
             if (-not $cloned) { Fail "git clone failed; no checkout published" }
-            Move-Item -LiteralPath $tree -Destination $InstallDir
+            if (-not $cloneIntoPlace) {
+                Move-Item -LiteralPath $tree -Destination $InstallDir
+            }
             Disable-TreelessGraphWrites $InstallDir
             Write-Ok "Hermes Agent cloned"
         } finally {
-            Remove-Item -LiteralPath $staged -Recurse -Force -ErrorAction SilentlyContinue
+            if ($staged) {
+                Remove-Item -LiteralPath $staged -Recurse -Force -ErrorAction SilentlyContinue
+            }
         }
     }
     if ($Commit) {
