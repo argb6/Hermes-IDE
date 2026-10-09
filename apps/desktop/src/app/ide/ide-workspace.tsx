@@ -6,6 +6,8 @@ import { WiredPane } from '@/app/contrib/context'
 import { ReviewPane } from '@/app/right-sidebar/review'
 import { $terminalInjection } from '@/app/right-sidebar/store'
 import { createTerminal, ensureTerminal } from '@/app/right-sidebar/terminal/terminals'
+import { Backdrop } from '@/components/Backdrop'
+import { Wordmark } from '@/components/chat/wordmark'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { useI18n } from '@/i18n'
@@ -542,7 +544,7 @@ export function IdeWorkspace() {
   }, [activeId])
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col bg-background">
+    <div className="flex h-full min-h-0 min-w-0 flex-col bg-(--ui-bg-chrome)">
       <div className="flex min-h-0 flex-1">
         <IdeActivityBar
           onPanel={next => {
@@ -557,10 +559,15 @@ export function IdeWorkspace() {
           panel={panel}
           sideOpen={sideOpen}
         />
+        {/* Everything right of the activity bar shares one fullscreen backdrop;
+            titlebar stays outside IdeShell padding, activity bar stays chrome. */}
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
+          <Backdrop force />
+          <div className="relative z-1 flex min-h-0 min-w-0 flex-1">
         {sideOpen && (
           <>
             <div
-              className="flex h-full shrink-0 flex-col border-r border-(--ui-stroke-secondary) bg-(--ui-sidebar-surface-background)"
+              className="flex h-full shrink-0 flex-col border-r border-(--ui-stroke-secondary) bg-(--ui-sidebar-surface-background)/90"
               style={{ width: sideWidth }}
             >
               <div className="flex h-9 shrink-0 items-center px-3 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
@@ -766,7 +773,7 @@ export function IdeWorkspace() {
               }
             />
             <div
-              className="flex h-full shrink-0 flex-col border-l border-(--ui-stroke-secondary) bg-background"
+              className="flex h-full shrink-0 flex-col border-l border-(--ui-stroke-secondary) bg-background/90"
               style={{ width: chatWidth }}
             >
               <IdeChatHeader
@@ -785,20 +792,22 @@ export function IdeWorkspace() {
             </div>
           </>
         )}
+          </div>
+          <IdeStatusBar
+            cwd={cwd}
+            folder={folder}
+            onOpenProblems={() => {
+              setBottomTab('problems')
+              setTerminalOpen(true)
+            }}
+            onOpenTerminal={() => {
+              setTerminalOpen(true)
+              createTerminal(cwd || undefined, $ideShell.get())
+            }}
+            terminalOpen={terminalOpen}
+          />
+        </div>
       </div>
-      <IdeStatusBar
-        cwd={cwd}
-        folder={folder}
-        onOpenProblems={() => {
-          setBottomTab('problems')
-          setTerminalOpen(true)
-        }}
-        onOpenTerminal={() => {
-          setTerminalOpen(true)
-          createTerminal(cwd || undefined, $ideShell.get())
-        }}
-        terminalOpen={terminalOpen}
-      />
     </div>
   )
 }
@@ -876,9 +885,9 @@ function IdeEditor({
       .pop() ?? ''
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-transparent">
       {tabs.length > 0 && (
-        <div className="flex h-9 shrink-0 items-stretch overflow-x-auto border-b border-(--ui-stroke-secondary) bg-(--ui-bg-chrome)">
+        <div className="flex h-9 shrink-0 items-stretch overflow-x-auto border-b border-(--ui-stroke-secondary) bg-(--ui-bg-chrome)/90">
           {tabs.map(tab => {
             const selected = tab.id === active?.id && !diff
 
@@ -886,7 +895,7 @@ function IdeEditor({
               <div
                 className={cn(
                   'group flex max-w-52 min-w-0 items-center border-r border-(--ui-stroke-secondary)',
-                  selected ? 'bg-background text-foreground' : 'text-muted-foreground'
+                  selected ? 'bg-background/90 text-foreground' : 'text-muted-foreground'
                 )}
                 key={tab.id}
               >
@@ -942,10 +951,15 @@ function IdeEditor({
         ) : active ? (
           <PreviewPane embedded onClose={() => onClose(active.id)} target={active.target} />
         ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-            {folder && <p className="text-sm text-foreground">{folder}</p>}
-            <p className="text-sm text-foreground">{t.ide.emptyTitle}</p>
-            <p className="max-w-sm text-xs text-muted-foreground">{t.ide.emptyBody}</p>
+          <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
+            <div className="w-full max-w-2xl min-w-0 px-2">
+              <Wordmark className="mb-2" text="HERMES AGENT" width="min(100%, 36rem)" />
+              {folder ? (
+                <p className="m-0 text-sm text-foreground">{folder}</p>
+              ) : (
+                <p className="m-0 text-sm text-muted-foreground">{t.ide.emptyBody}</p>
+              )}
+            </div>
             <div className="flex flex-wrap items-center justify-center gap-2">
               <Button onClick={() => void openFolderAsProject()} size="sm" variant="secondary">
                 {t.ide.openFolder}
@@ -955,7 +969,7 @@ function IdeEditor({
               </Button>
             </div>
             {recentFolders.length > 0 && (
-              <div className="mt-2 w-full max-w-sm text-left">
+              <div className="mt-1 w-full max-w-sm text-left">
                 <p className="mb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                   {t.ide.recentFolders}
                 </p>

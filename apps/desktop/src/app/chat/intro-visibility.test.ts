@@ -45,4 +45,8 @@ describe('shouldShowIntro', () => {
     expect(shouldShowIntro({ ...showing, activeSessionId: 'session-1' })).toBe(false)
     expect(shouldShowIntro({ ...showing, messagesEmpty: false })).toBe(false)
   })
+
+  it('hides in IDE mode so the editor empty state owns the wordmark', () => {
+    expect(shouldShowIntro({ ...showing, ideMode: true })).toBe(false)
+  })
 })

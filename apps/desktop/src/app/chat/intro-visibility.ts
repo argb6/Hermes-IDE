@@ -8,12 +8,16 @@
  *
  * `enabled` is the user's Appearance toggle and outranks every other clause:
  * turning the splash off never depends on which window asks.
+ *
+ * IDE mode parks the wordmark in the editor empty state instead, so the chat
+ * column must not paint a second HERMES AGENT splash.
  */
 export function shouldShowIntro(input: {
   activeSessionId: null | string
   auxiliaryWindow: boolean
   enabled: boolean
   freshDraftReady: boolean
+  ideMode?: boolean
   messagesEmpty: boolean
   primary: boolean
   routedSessionView: boolean
@@ -21,6 +25,7 @@ export function shouldShowIntro(input: {
 }): boolean {
   return (
     input.enabled &&
+    !input.ideMode &&
     input.primary &&
     !input.auxiliaryWindow &&
     input.freshDraftReady &&

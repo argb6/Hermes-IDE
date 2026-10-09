@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils'
 import { migrateSessionDraft } from '@/store/composer'
 import { migrateQueuedPrompts, parkQueuedPrompts } from '@/store/composer-queue'
 import { $introSplash } from '@/store/intro-splash'
+import { $workspaceMode } from '@/store/workspace-mode'
 import { $pinnedSessionIds } from '@/store/layout'
 import { $guideOpening, $onboardingGate } from '@/store/onboarding-gate'
 import { $activeGatewayProfile, $gatewaySwapTarget, $hydrationSyncProfile, $profiles } from '@/store/profile'
@@ -557,6 +558,7 @@ const ChatViewContent = memo(function ChatViewContent({
   const introPersonality = useStore($introPersonality)
   const introSeed = useStore($introSeed)
   const introSplash = useStore($introSplash)
+  const workspaceMode = useStore($workspaceMode)
   // PERF: ChatView must not subscribe to the view's $messages — the atom is
   // replaced on every streaming delta flush (~30×/s) and a subscription here
   // re-renders the entire chat shell (header, chat bar, thread wrapper) per
@@ -629,12 +631,14 @@ const ChatViewContent = memo(function ChatViewContent({
 
   // The compact new-session pop-out skips the wordmark/tagline intro — it's a
   // scratch window, not the full-height empty state. The Appearance toggle
-  // turns it off everywhere else.
+  // turns it off everywhere else. IDE parks the wordmark in the editor empty
+  // state, so the chat column stays quiet.
   const showIntro = shouldShowIntro({
     activeSessionId,
     auxiliaryWindow: isAuxiliaryWindow(),
     enabled: introSplash,
     freshDraftReady,
+    ideMode: workspaceMode === 'ide',
     messagesEmpty,
     primary: isPrimary,
     routedSessionView: isRoutedSessionView,
