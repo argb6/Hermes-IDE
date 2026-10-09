@@ -270,7 +270,7 @@ The token and port are placed on local backend children (`HERMES_IDE_BRIDGE_HOST
   | { status: 'unavailable', reason: string }
 ```
 
-The bridge never calls `lsp.start`. It uses a server that is already `ready` for that file's workspace (the renderer's `lsp:start`). If the document is not open yet, the bridge sends `didOpen` with the on-disk text to that same process. File URIs use `pathToFileUri` in `lsp/manager.ts` (`file://` + encoded absolute path). The renderer should use the same URI so a later agent `didOpen` does not replace an unsaved buffer.
+The bridge never calls `lsp.start`. It uses a server that is already `ready` for that file's workspace (the renderer's `lsp:start`, sent when a workspace is opened). If the document is not open yet, the bridge sends `didOpen` with the on-disk text to that same process. File URIs use `pathToFileUri` in `lsp/manager.ts` (`file://` + encoded absolute path). The renderer asks the main process for that string over sync channel `hermes:lsp-file-uri` and uses it as the Monaco model URI, so a later agent `didOpen` does not replace an unsaved buffer.
 
 A missing or wrong token is HTTP 401 `{ status: 'unavailable', reason: 'unauthorized' }`. Connections whose peer address is not loopback are rejected.
 

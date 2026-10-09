@@ -681,9 +681,27 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
 
     return () => ipcRenderer.removeListener('hermes:open-find-bar', listener)
   },
-  // Code intelligence, debug adapters, and declarative extensions. The main
-  // process owns the processes; failures resolve as a status, they don't reject.
-  // Contract: electron/ide/IPC.md.
+  // Workspace search runs ripgrep in this process. Code intelligence,
+  // debug adapters, and declarative extensions are the backend bridge
+  // (electron/ide/IPC.md). Failures resolve as a status; they don't reject.
+  search: {
+    start: request => ipcRenderer.invoke('hermes:search:start', request),
+    cancel: id => ipcRenderer.invoke('hermes:search:cancel', id),
+    replace: request => ipcRenderer.invoke('hermes:search:replace', request),
+    onEvent: callback => {
+      const listener = (_event, payload) => callback(payload)
+      ipcRenderer.on('hermes:search:event', listener)
+
+      return () => ipcRenderer.removeListener('hermes:search:event', listener)
+    }
+  },
+  // Same string as `pathToFileUri` in electron/ide/lsp/manager.ts. Sync because
+  // Monaco builds the model URI during render; preload cannot import node:path.
+  pathToFileUri: (filePath: string) => {
+    const value = ipcRenderer.sendSync('hermes:lsp-file-uri', filePath)
+
+    return typeof value === 'string' ? value : ''
+  },
   lsp: {
     start: request => ipcRenderer.invoke('lsp:start', request),
     stop: request => ipcRenderer.invoke('lsp:stop', request),

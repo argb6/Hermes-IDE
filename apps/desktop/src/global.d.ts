@@ -12,6 +12,7 @@ import type { UpdateHoldWire } from '../electron/update-hold-types'
 import type { UpdateRunReport } from '../electron/updater/update-metrics'
 import type { GrowRequest } from '../electron/window-growth'
 
+import type { SearchBridge } from './app/ide/ipc-types'
 import type { WakeIndicatorState } from './lib/wake-indicator'
 import type {
   QuickEntryStatePush,
@@ -657,6 +658,9 @@ declare global {
       }
       // Language servers, debug adapters, and Open VSX declarative extensions.
       // Main process owns the processes. Contract: electron/ide/IPC.md.
+      // `pathToFileUri` is the manager helper. Document URIs must use it so an
+      // agent didOpen sees the buffer the editor already has.
+      pathToFileUri?: (filePath: string) => string
       lsp: LspBridge
       dap: DapBridge
       ext: ExtBridge
@@ -672,6 +676,8 @@ declare global {
       // renderer can still open the FindBar when the OS compositor has
       // already grabbed the chord (#81727, e.g. Pop!_OS / GNOME).
       onOpenFindBarRequested: (callback: () => void) => () => void
+      /** Workspace search. Ripgrep runs in the Electron main process. */
+      search?: SearchBridge
     }
   }
 }

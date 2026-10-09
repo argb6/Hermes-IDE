@@ -26,9 +26,22 @@ import { DapManager } from './dap/manager'
 import { ExtensionStore } from './extensions/store'
 import { startIdeBridge, stopIdeBridge } from './bridge'
 import { setIdeIntelligenceHost } from './host'
-import { LspManager } from './lsp/manager'
+import { LspManager, pathToFileUri } from './lsp/manager'
 
 let registered = false
+let fileUriRegistered = false
+
+/** Sync answer for the renderer. The sandboxed preload cannot import `node:path`. */
+export function registerIdeFileUriIpc(): void {
+  if (fileUriRegistered) {
+    return
+  }
+
+  fileUriRegistered = true
+  ipcMain.on('hermes:lsp-file-uri', (event, filePath: unknown) => {
+    event.returnValue = typeof filePath === 'string' ? pathToFileUri(filePath) : ''
+  })
+}
 
 export function registerIdeIpc(): void {
   if (registered) {

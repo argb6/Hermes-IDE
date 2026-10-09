@@ -15,7 +15,23 @@ import {
 } from '@codemirror/commands'
 import type { Command, EditorView } from '@codemirror/view'
 
+import { toggleIdeBreakpoint, toggleIdeWordWrap } from './ide-state'
+
+export interface ActiveMonaco {
+  focus: () => void
+  getOffset: () => number
+  getValue: () => string
+  goto: (line: number, column?: number) => void
+  path: () => string
+  position: () => { column: number; line: number }
+  replaceOffsets: (start: number, end: number, text: string) => void
+  selectOffsets: (anchor: number, head: number) => void
+  toggleColumnSelection: () => void
+  trigger: (id: string) => void
+}
+
 let active: EditorView | null = null
+let monaco: ActiveMonaco | null = null
 
 export function noteActiveCodeEditor(view: EditorView | null) {
   active = view
@@ -24,6 +40,16 @@ export function noteActiveCodeEditor(view: EditorView | null) {
 export function clearActiveCodeEditor(view: EditorView) {
   if (active === view) {
     active = null
+  }
+}
+
+export function noteActiveMonaco(next: ActiveMonaco | null) {
+  monaco = next
+}
+
+export function clearActiveMonaco(next: ActiveMonaco) {
+  if (monaco === next) {
+    monaco = null
   }
 }
 
@@ -37,29 +63,83 @@ function run(command: Command) {
   return command(active)
 }
 
-export const editorUndo = () => run(undo)
-export const editorRedo = () => run(redo)
-export const editorSelectAll = () => run(selectAll)
-export const editorCopyLineUp = () => run(copyLineUp)
-export const editorCopyLineDown = () => run(copyLineDown)
-export const editorMoveLineUp = () => run(moveLineUp)
-export const editorMoveLineDown = () => run(moveLineDown)
-export const editorToggleComment = () => run(toggleComment)
-export const editorToggleBlockComment = () => run(toggleBlockComment)
-export const editorCursorAbove = () => run(addCursorAbove)
-export const editorCursorBelow = () => run(addCursorBelow)
-export const editorExpandSelection = () => run(selectParentSyntax)
-export const editorMatchingBracket = () => run(cursorMatchingBracket)
+function trigger(id: string) {
+  if (!monaco) {
+    return false
+  }
+
+  monaco.focus()
+  monaco.trigger(id)
+
+  return true
+}
+
+export const editorUndo = () => trigger('undo') || run(undo)
+export const editorRedo = () => trigger('redo') || run(redo)
+export const editorSelectAll = () => trigger('editor.action.selectAll') || run(selectAll)
+export const editorCopyLineUp = () => trigger('editor.action.copyLinesUpAction') || run(copyLineUp)
+export const editorCopyLineDown = () => trigger('editor.action.copyLinesDownAction') || run(copyLineDown)
+export const editorMoveLineUp = () => trigger('editor.action.moveLinesUpAction') || run(moveLineUp)
+export const editorMoveLineDown = () => trigger('editor.action.moveLinesDownAction') || run(moveLineDown)
+export const editorToggleComment = () => trigger('editor.action.commentLine') || run(toggleComment)
+export const editorToggleBlockComment = () => trigger('editor.action.blockComment') || run(toggleBlockComment)
+export const editorCursorAbove = () => trigger('editor.action.insertCursorAbove') || run(addCursorAbove)
+export const editorCursorBelow = () => trigger('editor.action.insertCursorBelow') || run(addCursorBelow)
+export const editorExpandSelection = () => trigger('editor.action.smartSelect.expand') || run(selectParentSyntax)
+export const editorMatchingBracket = () => trigger('editor.action.jumpToBracket') || run(cursorMatchingBracket)
+export const editorGoToDefinition = () => trigger('editor.action.revealDefinition')
+export const editorFindReferences = () => trigger('editor.action.goToReferences')
+export const editorRename = () => trigger('editor.action.rename')
+export const editorFormatDocument = () => trigger('editor.action.formatDocument')
+export const editorNextOccurrence = () => trigger('editor.action.addSelectionToNextFindMatch')
+export const editorPrevOccurrence = () => trigger('editor.action.addSelectionToPreviousFindMatch')
+export const editorAllOccurrences = () => trigger('editor.action.selectHighlights')
+export const editorNextProblem = () => trigger('editor.action.marker.next')
+export const editorPrevProblem = () => trigger('editor.action.marker.prev')
+export const editorToggleWordWrap = () => toggleIdeWordWrap()
+
+export function editorToggleColumnSelection() {
+  monaco?.toggleColumnSelection()
+}
+
+export function editorToggleBreakpoint() {
+  if (!monaco) {
+    return
+  }
+
+  toggleIdeBreakpoint(monaco.path(), monaco.position().line)
+}
 
 export function editorClipboard(kind: 'copy' | 'cut' | 'paste') {
+  monaco?.focus()
   active?.focus()
   document.execCommand(kind)
 }
 
 export function editorFind(query: string) {
+  if (!query) {
+    return false
+  }
+
+  if (monaco) {
+    const text = monaco.getValue()
+    const start = monaco.getOffset()
+    const later = text.indexOf(query, start)
+    const at = later >= 0 ? later : text.indexOf(query)
+
+    if (at < 0) {
+      return false
+    }
+
+    monaco.focus()
+    monaco.selectOffsets(at, at + query.length)
+
+    return true
+  }
+
   const view = active
 
-  if (!view || !query) {
+  if (!view) {
     return false
   }
 
@@ -79,9 +159,28 @@ export function editorFind(query: string) {
 }
 
 export function editorReplace(from: string, to: string) {
+  if (!from) {
+    return false
+  }
+
+  if (monaco) {
+    const text = monaco.getValue()
+    const at = text.indexOf(from)
+
+    if (at < 0) {
+      return false
+    }
+
+    monaco.focus()
+    monaco.replaceOffsets(at, at + from.length, to)
+    monaco.selectOffsets(at, at + to.length)
+
+    return true
+  }
+
   const view = active
 
-  if (!view || !from) {
+  if (!view) {
     return false
   }
 
@@ -102,9 +201,19 @@ export function editorReplace(from: string, to: string) {
 }
 
 export function editorGotoLine(line: number) {
+  if (!Number.isFinite(line) || line < 1) {
+    return false
+  }
+
+  if (monaco) {
+    monaco.goto(Math.floor(line))
+
+    return true
+  }
+
   const view = active
 
-  if (!view || !Number.isFinite(line) || line < 1) {
+  if (!view) {
     return false
   }
 

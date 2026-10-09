@@ -267,7 +267,7 @@ import {
 import { createFirstRunSetupGate } from './first-run-setup-gate'
 import { registerFsIpc } from './fs-ipc'
 import { ideBridgeChildEnv } from './ide/bridge'
-import { registerIdeIpc } from './ide/ipc'
+import { registerIdeFileUriIpc, registerIdeIpc } from './ide/ipc'
 import { decodeFileBytes } from './text-encoding'
 import type {
   GatewayFileSaveContext,
@@ -288,6 +288,7 @@ import { resolveGatewayVersion } from './gateway-version'
 import { probeGatewayWebSocket, spawnedBackendProbeOptions } from './gateway-ws-probe'
 import { windowsGitCandidates } from './git-binary-candidates'
 import { registerGitIpc } from './git-ipc'
+import { registerRipgrepIpc } from './ripgrep-ipc'
 import { desktopBackendSpawnEnv, guestOnboardingEnabled } from './guest-onboarding'
 import {
   assertExistingPathForOpen,
@@ -4046,6 +4047,10 @@ async function restoreBundledBackend(): Promise<void> {
 // set, window-all-closed calls app.quit() on every platform so the process
 // actually dies and the hand-off script can proceed immediately.
 let isQuittingForHandoff = false
+// Overlay-suppression latch (#55920) and the quit that last-window close
+// consults. Written from the primary-window close and before-quit paths.
+let appQuitting = false
+let quitInProgress = false
 
 // Quit-guard latches: one while the confirmation is on screen (a second
 // Cmd-Q must not stack dialogs), one after the user has said "quit anyway"
@@ -18428,8 +18433,9 @@ registerFsIpc({
 
 // Git-driven features (worktrees, review pane, repo scan) — see git-ipc.ts.
 registerGitIpc({ resolveGitBinary, resolveGhBinary })
-
+registerRipgrepIpc()
 registerIdeIpc()
+registerIdeFileUriIpc()
 registerMcpOauthCallbackIpc()
 
 // Embedded terminal PTY host (hermes:terminal:*) — see terminal-ipc.ts.

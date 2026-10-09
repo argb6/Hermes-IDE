@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
@@ -10,6 +10,8 @@ import { notifyError } from '@/store/notifications'
 
 import { markIdeDocumentClean, repoRelativePath } from './ide-documents'
 import { appendIdeOutput } from './ide-output'
+
+const IdeMonaco = lazy(() => import('./ide-monaco').then(mod => ({ default: mod.IdeMonaco })))
 
 interface IdeConflictProps {
   cwd: string
@@ -109,27 +111,30 @@ export function IdeConflict({ cwd, onSaved, path }: IdeConflictProps) {
         </Button>
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-3 divide-x divide-(--ui-stroke-secondary)">
-        <ConflictPane label={t.ide.conflictOurs} readOnly value={ours} />
+        <ConflictPane file={path} label={t.ide.conflictOurs} readOnly value={ours} />
         <ConflictPane
+          file={path}
           label={t.ide.conflictResult}
-          onChange={value => {
-            setResult(value)
+          onChange={next => {
+            setResult(next)
             setDirty(true)
           }}
           value={result}
         />
-        <ConflictPane label={t.ide.conflictTheirs} readOnly value={theirs} />
+        <ConflictPane file={path} label={t.ide.conflictTheirs} readOnly value={theirs} />
       </div>
     </div>
   )
 }
 
 function ConflictPane({
+  file,
   label,
   onChange,
   readOnly,
   value
 }: {
+  file: string
   label: string
   onChange?: (value: string) => void
   readOnly?: boolean
@@ -145,16 +150,20 @@ function ConflictPane({
       >
         {label}
       </div>
-      <textarea
-        className={cn(
-          'min-h-0 flex-1 resize-none bg-transparent p-2 font-mono text-xs leading-5 text-foreground outline-none',
-          readOnly && 'text-muted-foreground'
-        )}
-        onChange={event => onChange?.(event.target.value)}
-        readOnly={readOnly}
-        spellCheck={false}
-        value={value}
-      />
+      <div className="min-h-0 flex-1">
+        <Suspense fallback={null}>
+          <IdeMonaco
+            host={false}
+            initialValue={value}
+            minimap={false}
+            modelUri={`inmemory://conflict/${encodeURIComponent(file)}/${encodeURIComponent(label)}`}
+            onChange={onChange}
+            path={file}
+            readOnly={readOnly}
+            value={value}
+          />
+        </Suspense>
+      </div>
     </div>
   )
 }
