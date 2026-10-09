@@ -24,6 +24,7 @@ import type {
 } from './contract'
 import { DapManager } from './dap/manager'
 import { ExtensionStore } from './extensions/store'
+import { startIdeBridge, stopIdeBridge } from './bridge'
 import { setIdeIntelligenceHost } from './host'
 import { LspManager } from './lsp/manager'
 
@@ -54,10 +55,14 @@ export function registerIdeIpc(): void {
   const extensions = new ExtensionStore(facts)
 
   setIdeIntelligenceHost({ lsp, dap, extensions })
+  void startIdeBridge(lsp).catch(error => {
+    console.error(`[ide:bridge] ${error instanceof Error ? error.message : 'bind failed'}`)
+  })
   app.on('will-quit', () => {
     lsp.dispose()
     dap.dispose()
     setIdeIntelligenceHost(null)
+    void stopIdeBridge()
   })
 
   ipcMain.handle('lsp:start', (_event, payload: unknown) => lsp.start(asLspStart(payload)))

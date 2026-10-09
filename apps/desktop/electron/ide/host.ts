@@ -1,7 +1,7 @@
-// In-process seam for a later Hermes tool. Electron IPC is a caller of these
-// objects; the processes live here. A Python tool should talk to this host
-// (or a future loopback in front of it) instead of spawning a second pyright
-// or debugpy.
+// In-process seam. Electron IPC and the loopback agent bridge (bridge.ts)
+// are callers of these objects; the processes live here. The Python tool
+// talks to the bridge, which only uses this host, so it cannot spawn a
+// second pyright or debugpy.
 
 import type { DapManager } from './dap/manager'
 import type { ExtensionStore } from './extensions/store'

@@ -7,6 +7,13 @@ protocol failures resolve as a status payload so the editor keeps working.
 
 Payload types live in `contract.ts`.
 
+## Contract changes
+
+Additive. Existing `lsp:*`, `dap:*`, and `ext:*` channel names and payloads are unchanged.
+
+- The desktop listens on `127.0.0.1` for the Python `code_intelligence` tool. See Agent bridge. Local backend spawns receive `HERMES_IDE_BRIDGE_HOST`, `HERMES_IDE_BRIDGE_PORT`, and `HERMES_IDE_BRIDGE_TOKEN` in the process environment for that launch only. They are not config and are not written into the repo.
+- Each LSP session remembers the latest `textDocument/publishDiagnostics` body so the agent bridge can read it. The `lsp:diagnostics` push payload is unchanged.
+
 ## Status
 
 `unavailable | downloading | ready | crashed`
@@ -243,9 +250,29 @@ Every `path` inside `contributes` is absolute and stays inside `extension.path`.
 → { ok: true, extensions: InstalledExtension[] }
 ```
 
-## Agent seam
+## Agent bridge
 
-`getIdeIntelligenceHost()` in `host.ts` returns the live `LspManager`, `DapManager`, and `ExtensionStore` after `registerIdeIpc()`. A future Python tool should call that host (or a loopback placed in front of it) so it reuses these processes instead of starting a second pyright or debugpy.
+`getIdeIntelligenceHost()` in `host.ts` is the in-process owner of the language servers. The Python agent is a different process, so it does not call that function. `registerIdeIpc()` also binds an HTTP listener to `127.0.0.1` on an ephemeral port and mints a random token for that desktop launch.
+
+The token and port are placed on local backend children (`HERMES_IDE_BRIDGE_HOST`, `HERMES_IDE_BRIDGE_PORT`, `HERMES_IDE_BRIDGE_TOKEN`), the same way `HERMES_DASHBOARD_SESSION_TOKEN` is passed. CLI processes and remote backends do not receive them. The tool `code_intelligence` (`desktop_ui`, read-only) returns `{"status":"unavailable",...}` when the variables are missing, the host is not loopback, the socket is down, or the language server is not already `ready`.
+
+`POST /ide/query` with `Authorization: Bearer <token>` and a JSON body:
+
+```ts
+{
+  action: 'definition' | 'references' | 'hover' | 'documentSymbol' | 'diagnostics',
+  path: string,          // source file
+  line?: number,         // 1-based; required for definition, references, hover
+  character?: number,    // 1-based; defaults to 1
+  workspaceRoot?: string
+}
+→ { status: 'ok', result?: unknown, diagnostics?: unknown[] }
+  | { status: 'unavailable', reason: string }
+```
+
+The bridge never calls `lsp.start`. It uses a server that is already `ready` for that file's workspace (the renderer's `lsp:start`). If the document is not open yet, the bridge sends `didOpen` with the on-disk text to that same process. File URIs use `pathToFileUri` in `lsp/manager.ts` (`file://` + encoded absolute path). The renderer should use the same URI so a later agent `didOpen` does not replace an unsaved buffer.
+
+A missing or wrong token is HTTP 401 `{ status: 'unavailable', reason: 'unauthorized' }`. Connections whose peer address is not loopback are rejected.
 
 ## Packaging
 

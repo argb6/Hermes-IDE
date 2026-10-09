@@ -176,6 +176,9 @@ describe('lsp manager', () => {
         diagnostics: [{ message: 'unused' }]
       }
     ])
+    await expect(lsp.waitForDiagnostics('javascript', workspace, 'file:///web/app.js', 20)).resolves.toEqual([
+      { message: 'unused' }
+    ])
   })
 
   it('restarts a crashed server with the scheduled backoff', async () => {
