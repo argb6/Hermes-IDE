@@ -266,6 +266,7 @@ import {
 } from './find-in-page'
 import { createFirstRunSetupGate } from './first-run-setup-gate'
 import { registerFsIpc } from './fs-ipc'
+import { registerIdeIpc } from './ide/ipc'
 import { decodeFileBytes } from './text-encoding'
 import type {
   GatewayFileSaveContext,
@@ -18425,8 +18426,7 @@ registerFsIpc({
 // Git-driven features (worktrees, review pane, repo scan) — see git-ipc.ts.
 registerGitIpc({ resolveGitBinary, resolveGhBinary })
 
-// Client-side loopback callback for MCP OAuth against remote backends — see
-// mcp-oauth-callback-ipc.ts.
+registerIdeIpc()
 registerMcpOauthCallbackIpc()
 
 // Embedded terminal PTY host (hermes:terminal:*) — see terminal-ipc.ts.
