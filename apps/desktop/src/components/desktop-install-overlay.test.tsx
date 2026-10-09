@@ -114,7 +114,7 @@ describe('DesktopInstallOverlay first-run setup', () => {
     expect(screen.queryByText(/Fetching installer manifest/i)).toBeNull()
   })
 
-  it('continues local bootstrap only when Install Hermes locally is selected', async () => {
+  it('auto-starts local bootstrap when the setup choice appears', async () => {
     const desktop = installDesktopMock(
       bootstrapState({
         setupChoice: {
@@ -128,9 +128,7 @@ describe('DesktopInstallOverlay first-run setup', () => {
 
     render(<DesktopInstallOverlay />)
 
-    fireEvent.click(await screen.findByText('Install Hermes locally'))
-
-    expect(desktop.continueBootstrapLocal).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(desktop.continueBootstrapLocal).toHaveBeenCalledTimes(1))
     expect(screen.getByText('Set up Hermes Desktop')).toBeTruthy()
 
     act(() => {
@@ -156,12 +154,10 @@ describe('DesktopInstallOverlay first-run setup', () => {
     desktop.continueBootstrapLocal = undefined as never
     render(<DesktopInstallOverlay />)
 
-    const install = (await screen.findByText('Install Hermes locally')).closest('button') as HTMLButtonElement
-    fireEvent.click(install)
-
     expect(
       await screen.findByText('Local installation could not start. Restart Hermes Desktop and try again.')
     ).toBeTruthy()
+    const install = (await screen.findByText('Install Hermes locally')).closest('button') as HTMLButtonElement
     expect(install.disabled).toBe(false)
   })
 
@@ -180,9 +176,8 @@ describe('DesktopInstallOverlay first-run setup', () => {
     desktop.continueBootstrapLocal = undefined as never
     render(<DesktopInstallOverlay />)
 
-    // Click the instant the choice paints, before React drains the passive
-    // effect that reacts to the first snapshot. A loaded runner hits this
-    // window by accident; observing the DOM directly hits it every time.
+    // Auto-start (or a manual click) can race the first snapshot commit; the
+    // error must still stick for the active root.
     const install = (await whenPresent('Install Hermes locally')).closest('button') as HTMLButtonElement
     fireEvent.click(install)
 

@@ -30,6 +30,24 @@ test('first-run setup gate skips non-bootstrap backends', async () => {
   assert.equal(gate.hasWaiter(), false)
 })
 
+test('autoContinueLocal confirms bootstrap without prompting', async () => {
+  const prompts = []
+  const logs = []
+  const gate = createFirstRunSetupGate({
+    autoContinueLocal: true,
+    log: message => logs.push(message),
+    promptChoice: backend => prompts.push(backend),
+    stuckAfterMs: 0
+  })
+
+  assert.equal(await gate.wait(bootstrapBackend), 'continue-local')
+  assert.deepEqual(prompts, [])
+  assert.equal(gate.hasWaiter(), false)
+  assert.equal(gate.isLocalBootstrapConfirmed(), true)
+  assert.equal(gate.shouldGate(bootstrapBackend), false)
+  assert.match(logs.join('\n'), /auto-continuing local install/)
+})
+
 test('first-run setup gate prompts once for concurrent waits', async () => {
   const prompts = []
   const gate = createFirstRunSetupGate({ promptChoice: backend => prompts.push(backend), stuckAfterMs: 0 })

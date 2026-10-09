@@ -7,6 +7,8 @@ interface FirstRunSetupBackend {
 }
 
 interface FirstRunSetupGateOptions {
+  /** When true, bootstrap-needed boots confirm local install immediately (no click). */
+  autoContinueLocal?: boolean
   hideChoice?: () => void
   log?: (message: string) => void
   onStuck?: (backend: FirstRunSetupBackend, stuckAfterMs: number) => void
@@ -17,6 +19,7 @@ interface FirstRunSetupGateOptions {
 export type FirstRunSetupDecision = 'continue-local' | 'remote-applied' | 'reset'
 
 export function createFirstRunSetupGate({
+  autoContinueLocal = false,
   hideChoice,
   log,
   onStuck,
@@ -64,6 +67,14 @@ export function createFirstRunSetupGate({
 
   const wait = async (backend?: FirstRunSetupBackend | null) => {
     if (!shouldGate(backend)) {
+      return 'continue-local' as const
+    }
+
+    // Hermes-IDE: first open starts download/install without a setup click.
+    if (autoContinueLocal) {
+      localBootstrapConfirmed = true
+      log?.('[bootstrap] auto-continuing local install (no first-run click)')
+
       return 'continue-local' as const
     }
 

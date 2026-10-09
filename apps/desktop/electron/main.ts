@@ -2828,6 +2828,8 @@ function hideFirstRunSetupChoice() {
 function getFirstRunSetupGate() {
   if (!firstRunSetupGate) {
     firstRunSetupGate = createFirstRunSetupGate({
+      // First open should download/install immediately — no "Install locally" click.
+      autoContinueLocal: true,
       hideChoice: hideFirstRunSetupChoice,
       log: rememberLog,
       onStuck: (_backend, stuckAfterMs) => {
@@ -2859,8 +2861,8 @@ async function waitForFirstRunSetupChoice(backend) {
   updateBootProgress(
     {
       error: null,
-      message: 'Waiting for first-run setup choice',
-      phase: 'bootstrap.choice',
+      message: 'Starting local Hermes install',
+      phase: 'bootstrap',
       progress: 12,
       running: true
     },

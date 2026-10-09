@@ -397,11 +397,49 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
     starting: boolean
     error: string | null
   }>({ root: null, starting: false, error: null })
+  const autoStartedRootRef = useRef<string | null>(null)
 
   const activeRoot = state.setupChoice?.activeRoot ?? null
   const forActiveRoot = localStart.root === activeRoot
   const localStarting = forActiveRoot && localStart.starting
   const localStartError = forActiveRoot ? localStart.error : null
+
+  const startLocalBootstrap = async (root: string | null) => {
+    setLocalStart({ root, starting: true, error: null })
+
+    try {
+      const desktop = window.hermesDesktop
+
+      if (!desktop || typeof desktop.continueBootstrapLocal !== 'function') {
+        throw new Error(copy.localStartUnavailable)
+      }
+
+      await desktop.continueBootstrapLocal()
+    } catch (err) {
+      setLocalStart({ root, starting: false, error: errorMessage(err) })
+    }
+  }
+
+  // If a setup-choice card still appears (older main / race), start install
+  // immediately — first open must not require a click.
+  useEffect(() => {
+    if (!enabled || !state.setupChoice) {
+      autoStartedRootRef.current = null
+
+      return
+    }
+
+    const root = state.setupChoice.activeRoot ?? null
+    const key = root ?? ''
+
+    if (autoStartedRootRef.current === key) {
+      return
+    }
+
+    autoStartedRootRef.current = key
+    void startLocalBootstrap(root)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one auto-start per setupChoice root
+  }, [enabled, state.setupChoice])
 
   // Mount logic: show whenever a bootstrap is in flight, completed-with-error,
   // or actively running with a manifest. Hide entirely after a successful
@@ -455,20 +493,8 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
             <button
               className="w-full rounded-lg border border-(--ui-stroke-tertiary) bg-(--ui-bg-quinary) p-4 text-left transition hover:bg-(--chrome-action-hover) disabled:cursor-not-allowed disabled:opacity-60"
               disabled={localStarting}
-              onClick={async () => {
-                setLocalStart({ root: activeRoot, starting: true, error: null })
-
-                try {
-                  const desktop = window.hermesDesktop
-
-                  if (!desktop || typeof desktop.continueBootstrapLocal !== 'function') {
-                    throw new Error(copy.localStartUnavailable)
-                  }
-
-                  await desktop.continueBootstrapLocal()
-                } catch (err) {
-                  setLocalStart({ root: activeRoot, starting: false, error: errorMessage(err) })
-                }
+              onClick={() => {
+                void startLocalBootstrap(activeRoot)
               }}
               type="button"
             >
