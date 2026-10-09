@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 
-import { Button } from '@/components/ui/button'
 import { saveCustomEndpoint } from '@/hermes'
 import { useI18n } from '@/i18n'
+import { cn } from '@/lib/utils'
 import { notifyError } from '@/store/notifications'
 
 import catalog from './opencode-providers.json'
+import { LIST_ROW_COLUMNS } from './primitives'
 
 interface CatalogProvider {
   api: string
@@ -18,7 +19,8 @@ interface CatalogProvider {
 const PROVIDERS = catalog as CatalogProvider[]
 
 /** OpenCode's models.dev catalog, shipped offline. Adding one writes a custom
- *  endpoint without a key; the key stays on the endpoint page. */
+ *  endpoint without a key; the key stays on the endpoint page. Rows match the
+ *  Hermes credential list (bullet + name + bare paste-style action). */
 export function OpencodeProviderCatalog({
   profile,
   onAdded
@@ -52,17 +54,27 @@ export function OpencodeProviderCatalog({
         placeholder={copy.search}
         value={query}
       />
-      <div className="grid max-h-80 gap-1 overflow-auto">
+      <div className="grid max-h-80 gap-2 overflow-auto">
         {visible.length === 0 && <p className="text-xs text-muted-foreground">{copy.noMatch}</p>}
-        {visible.map(provider => (
-          <div className="flex items-center gap-2 px-1 py-0.5" key={provider.id}>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm">{provider.name}</p>
-              <p className="truncate text-xs text-muted-foreground">{provider.api || copy.noAddress}</p>
-            </div>
-            <Button
-              disabled={!provider.api || adding === provider.id}
+        {visible.map(provider => {
+          const busy = adding === provider.id
+          const disabled = !provider.api || busy
+          const action = busy ? copy.adding : t.settings.credentials.pasteLabelKey(provider.name)
+
+          return (
+            <button
+              className={cn(
+                '@container group/card w-full rounded-[6px] p-3 text-left transition-colors',
+                'row-hover',
+                disabled && 'cursor-not-allowed opacity-60'
+              )}
+              disabled={disabled}
+              key={provider.id}
               onClick={() => {
+                if (disabled) {
+                  return
+                }
+
                 setAdding(provider.id)
                 void saveCustomEndpoint(
                   {
@@ -78,13 +90,24 @@ export function OpencodeProviderCatalog({
                   .catch(error => notifyError(error, provider.name))
                   .finally(() => setAdding(null))
               }}
-              size="sm"
-              variant="secondary"
+              type="button"
             >
-              {adding === provider.id ? copy.adding : copy.add}
-            </Button>
-          </div>
-        ))}
+              <div className={cn('grid grid-cols-1 items-start gap-x-3 gap-y-1.5 @2xl:gap-y-3', LIST_ROW_COLUMNS)}>
+                <div className="flex h-8 min-w-0 items-center gap-2">
+                  <span className="size-2 shrink-0 rounded-full bg-(--ui-stroke-secondary)" />
+                  <span className="min-w-0 truncate text-[length:var(--conversation-text-font-size)] font-medium text-foreground">
+                    {provider.name}
+                  </span>
+                </div>
+                <div className="flex h-8 min-w-0 items-center @2xl:justify-self-end">
+                  <span className="truncate text-[length:var(--conversation-text-font-size)] text-muted-foreground">
+                    {action}
+                  </span>
+                </div>
+              </div>
+            </button>
+          )
+        })}
       </div>
     </div>
   )

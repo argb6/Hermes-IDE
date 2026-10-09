@@ -2474,7 +2474,7 @@ export const en: Translations = {
       },
       opencodeCatalog: {
         title: count => `OpenCode providers (${count})`,
-        hint: 'Same catalog OpenCode ships. Add one to fill in its key on the custom endpoint page.',
+        hint: 'Same catalog OpenCode ships. Pick one to add it, then paste its key on the custom endpoint page.',
         search: 'Search this catalog…',
         add: 'Add',
         adding: 'Adding…',

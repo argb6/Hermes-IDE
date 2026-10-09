@@ -2409,7 +2409,7 @@ export const zh = defineLocale({
       },
       opencodeCatalog: {
         title: count => `OpenCode 供应商（${count}）`,
-        hint: '和 OpenCode 用的是同一份目录。点添加后，到自定义端点里填密钥。',
+        hint: '和 OpenCode 用的是同一份目录。点选后会加入自定义端点，再在那里粘贴密钥。',
         search: '在这份目录里搜…',
         add: '添加',
         adding: '正在添加…',

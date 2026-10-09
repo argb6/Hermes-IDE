@@ -72,13 +72,21 @@ export function IdeStatusBar({
       </div>
       {folder && <span className="max-w-40 truncate">{folder}</span>}
       <IdeGatewayChip />
-      <button className="flex items-center gap-1 hover:text-foreground" onClick={onOpenProblems} type="button">
-        <Codicon name="error" size={14} />
-        {errors}
-      </button>
-      <button className="flex items-center gap-1 hover:text-foreground" onClick={onOpenProblems} type="button">
-        <Codicon name="warning" size={14} />
-        {warnings}
+      <button
+        aria-label={`${t.ide.problemsError} ${errors}, ${t.ide.problemsWarn} ${warnings}`}
+        className="flex items-center gap-1.5 hover:text-foreground"
+        onClick={onOpenProblems}
+        title={`${t.ide.problemsError} ${errors} · ${t.ide.problemsWarn} ${warnings}`}
+        type="button"
+      >
+        <span className="inline-flex items-center gap-1">
+          <Codicon name="error" size={14} />
+          {errors}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <Codicon name="warning" size={14} />
+          {warnings}
+        </span>
       </button>
       <LspIndicator lsp={lsp} />
       <div className="flex-1" />
