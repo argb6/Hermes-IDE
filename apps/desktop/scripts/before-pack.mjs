@@ -53,6 +53,7 @@ import { existsSync, rmSync, renameSync } from 'node:fs'
 import path from 'node:path'
 import { Arch } from 'electron-builder'
 import { copyNativeInputs } from './prepared-native-deps.mjs'
+import { stageRipgrep } from './stage-ripgrep.mjs'
 import { removeDirSync } from './stage-native-deps.mjs'
 
 /** @param {string | null | undefined} appOutDir @returns {boolean} */
@@ -139,5 +140,9 @@ export default async function beforePack(context) {
   const app = context.packager.projectDir
   const source = path.resolve(app, '../..')
   const nativeDeps = process.env.HERMES_PREPARED_NATIVE_DEPS || path.join(app, 'build/native-deps')
-  copyNativeInputs({ source, nativeDeps, out: path.join(app, 'dist/node_modules'), platform, arch })
+  const outNodeModules = path.join(app, 'dist/node_modules')
+  copyNativeInputs({ source, nativeDeps, out: outNodeModules, platform, arch })
+  // Hoisted workspace packages are not under apps/desktop/node_modules; stage
+  // them next to electron-main so createRequire(import.meta.url) resolves them.
+  stageRipgrep({ source, out: outNodeModules, platform, arch })
 }

@@ -12,40 +12,29 @@ read signing secrets. `CSC_IDENTITY_AUTO_DISCOVERY=false` skips certificate
 lookup. Azure signing in `windowsSigning()` already no-ops when
 `AZURE_SIGN_ENDPOINT` / `AZURE_CLIENT_ID` are unset.
 
-## Staged natives (`node-pty`, `get-windows`)
+## Staged `dist/node_modules` (`node-pty`, `get-windows`, `@vscode/ripgrep`)
 
-`before-pack` copies prepared natives into `dist/node_modules/`. electron-builder
-still injects `!**/node_modules/**`, so `files` must list `dist/node_modules/**/*`
-or the installed app fails at launch with `Cannot find package 'node-pty'`.
+`before-pack` stages:
+
+- prepared natives (`node-pty`, `get-windows`) from `build/native-deps-*`
+- `@vscode/ripgrep` + `@vscode/ripgrep-<platform>-<arch>` from the workspace
+  (npm hoist puts them under the repo root, not `apps/desktop/node_modules`)
+
+electron-builder still injects `!**/node_modules/**`, so `files` must list
+`dist/node_modules/**/*` or launch fails with `Cannot find package 'node-pty'`
+/ `Cannot find module '@vscode/ripgrep'`.
 
 After install they unpack under:
 
 `<install dir>\resources\app.asar.unpacked\dist\node_modules\node-pty\`
+`<install dir>\resources\app.asar.unpacked\dist\node_modules\@vscode\ripgrep-win32-x64\bin\rg.exe`
 
-## ripgrep
+## ripgrep install notes
 
-`@vscode/ripgrep@1.18.0` (added by the IDE frontend PR) has no `postinstall`.
-`rg.exe` is a file inside the optional npm package
-`@vscode/ripgrep-win32-x64` (`package/bin/rg.exe`). A Windows x64 `npm ci`
-installs that package from the npm registry. No GitHub token and no download
-from `github.com` are required. Do not pass `--omit=optional` /
-`npm_config_omit=optional`.
-
-`files` is a whitelist, so the meta package and
-`node_modules/@vscode/ripgrep-*/**` are listed explicitly. `asar.unpack`
-extracts the platform package. After install the binary is a normal Windows
-`.exe` at:
-
-`<install dir>\resources\app.asar.unpacked\node_modules\@vscode\ripgrep-win32-x64\bin\rg.exe`
-
-The per-user default install dir is `%LOCALAPPDATA%\Programs\<app folder>`.
-The npm tarball mode is `0644`. Windows runs `rg.exe` by its PE extension;
-that mode is not an execute bit.
-
-The meta package stays inside `app.asar`. The frontend PR's `unpackAsarPath`
-already rewrites an `app.asar` + separator path to `app.asar.unpacked` and
-leaves an already-unpacked path alone. This packaging change does not edit
-that runtime code.
+`@vscode/ripgrep@1.18.0` has no `postinstall`. `rg.exe` ships inside the
+optional npm package `@vscode/ripgrep-win32-x64`. A Windows x64 `npm ci` must
+not use `--omit=optional`. The frontend `unpackAsarPath` helper rewrites
+`app.asar` → `app.asar.unpacked` so Electron can exec `rg.exe`.
 
 ## Uninstall and `%LOCALAPPDATA%\hermes`
 

@@ -131,11 +131,9 @@ module.exports = {
     'assets/**',
     'public/**',
     'package.json',
-    'node_modules/@vscode/ripgrep/**/*',
-    'node_modules/@vscode/ripgrep-*/**/*',
     // electron-builder injects `!**/node_modules/**` before these includes.
-    // Staged natives live under dist/node_modules (before-pack); re-include or
-    // the packaged app throws ERR_MODULE_NOT_FOUND for node-pty / get-windows.
+    // before-pack stages node-pty, get-windows, and @vscode/ripgrep* into
+    // dist/node_modules (workspace hoist leaves apps/desktop/node_modules empty).
     'dist/node_modules/**/*'
   ],
   beforeBuild: channelRequest ? async () => {
