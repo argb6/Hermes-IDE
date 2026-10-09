@@ -3,6 +3,7 @@ import type { HermesSkin } from '@hermes/shared/skin'
 import type { TranslucencyState } from '@hermes/shared/translucency'
 
 import type { ScreenshotApi } from '../electron/command-screenshot-types'
+import type { DapBridge, ExtBridge, LspBridge } from '../electron/ide/contract'
 import type { MachineProfile } from '../electron/machine-profile'
 import type { HermesNotification } from '../electron/notification-types'
 import type { PoolLimits } from '../electron/pool-limits'
@@ -654,6 +655,11 @@ declare global {
         // returns the most-installed themes.
         searchMarketplace: (query: string) => Promise<DesktopMarketplaceSearchItem[]>
       }
+      // Language servers, debug adapters, and Open VSX declarative extensions.
+      // Main process owns the processes. Contract: electron/ide/IPC.md.
+      lsp: LspBridge
+      dap: DapBridge
+      ext: ExtBridge
       // Find-in-page: delegates to Electron's webContents.findInPage on the
       // IPC sender's window so Cmd+F from a secondary session window
       // searches that window (not the primary). `onFoundInPage` returns the

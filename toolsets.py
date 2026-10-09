@@ -142,7 +142,7 @@ TOOLSETS = {
         "reactions (GUI sessions only)",
         ["read_terminal", "close_terminal", "desktop_preview", "drive_preview",
          "annotate_preview", "read_window_below", "focus_pane", "react_to_message",
-         "gui_tour", "show_tip"],
+         "gui_tour", "show_tip", "code_intelligence"],
     ),
     # Enabled per SESSION whose PROFILE carries ``role: setup`` in its backend-written
     # profile.yaml (tui_gateway/server.py::_load_enabled_toolsets); stripped from every
