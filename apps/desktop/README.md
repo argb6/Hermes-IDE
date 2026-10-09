@@ -103,10 +103,11 @@ npm run dev:fake-boot   # exercise the startup overlay with deterministic delays
 ### Building installers
 
 ```bash
-npm run dist:mac     # DMG + zip
-npm run dist:win     # MSIX
-npm run dist:linux   # AppImage + deb + rpm
-npm run pack         # unpacked app under release/ (no installer)
+npm run dist:mac      # DMG + zip
+npm run dist:win      # MSIX
+npm run dist:win:nsis # assisted NSIS, x64, not published (see assets/nsis-packaging.md)
+npm run dist:linux    # AppImage + deb + rpm
+npm run pack          # unpacked app under release/ (no installer)
 ```
 
 These are ordinary packaging commands, not complete tagged payload builds.

@@ -7,7 +7,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   ReactNode
 } from 'react'
-import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, Fragment, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { defaultRehypePlugins, defaultRemarkPlugins, Streamdown } from 'streamdown'
 
 import { getApiRequestConnection } from '@/api/client'
@@ -19,6 +19,7 @@ import { $ideEditor, $ideSaveRequest, fileFacts, languageLabel, noteIdeEditor } 
 import { $ideOutlineJump } from '@/app/ide/ide-nav'
 import { RichCodeBlock } from '@/components/assistant-ui/embeds'
 import { CodeEditor } from '@/components/chat/code-editor'
+import { $workspaceMode } from '@/store/workspace-mode'
 import { FileDiffPanel } from '@/components/chat/diff-lines'
 import { chunkTextLines, useFixedRowWindow } from '@/components/chat/fixed-row-window'
 import { LazyShiki as ShikiHighlighter } from '@/components/chat/shiki-highlighter'
@@ -52,6 +53,8 @@ import { cn } from '@/lib/utils'
 import { markPreviewTabMissing, openPreview, type PreviewTarget } from '@/store/preview'
 import { setPreviewDirty } from '@/store/preview-edit'
 import { $connection, $currentCwd } from '@/store/session'
+
+const IdeMonaco = lazy(() => import('@/app/ide/ide-monaco').then(mod => ({ default: mod.IdeMonaco })))
 import { notifyWorkspaceChanged } from '@/store/workspace-events'
 
 const SHIKI_THEME = { dark: 'github-dark-default', light: 'github-light-default' } as const
@@ -889,6 +892,7 @@ export function LocalFilePreview({
   const readViewRef = useRef<HTMLDivElement>(null)
   const hoverRef = useRef(false)
   const connection = useStore($connection)
+  const ide = useStore($workspaceMode) === 'ide'
   const fsCacheKey = desktopFsCacheKey(connection)
   const filePath = filePathForTarget(target)
   const isImage = target.previewKind === 'image'
@@ -1300,22 +1304,43 @@ export function LocalFilePreview({
           />
         )}
         <div className="min-h-0 flex-1 overflow-hidden">
-          <CodeEditor
-            filePath={filePath}
-            initialValue={draftRef.current}
-            key={editorKey}
-            onCaret={({ column, line }) => {
-              const current = $ideEditor.get()
+          {ide ? (
+            <Suspense fallback={null}>
+              <IdeMonaco
+                initialValue={draftRef.current}
+                key={editorKey}
+                onCaret={({ column, line }) => {
+                  const current = $ideEditor.get()
 
-              if (!current || current.path !== filePath) {
-                return
-              }
+                  if (!current || current.path !== filePath) {
+                    return
+                  }
 
-              noteIdeEditor({ ...current, column, line })
-            }}
-            onChange={handleEditorChange}
-            onSave={() => void saveEdit()}
-          />
+                  noteIdeEditor({ ...current, column, line })
+                }}
+                onChange={handleEditorChange}
+                onSave={() => void saveEdit()}
+                path={filePath}
+              />
+            </Suspense>
+          ) : (
+            <CodeEditor
+              filePath={filePath}
+              initialValue={draftRef.current}
+              key={editorKey}
+              onCaret={({ column, line }) => {
+                const current = $ideEditor.get()
+
+                if (!current || current.path !== filePath) {
+                  return
+                }
+
+                noteIdeEditor({ ...current, column, line })
+              }}
+              onChange={handleEditorChange}
+              onSave={() => void saveEdit()}
+            />
+          )}
         </div>
       </div>
     )

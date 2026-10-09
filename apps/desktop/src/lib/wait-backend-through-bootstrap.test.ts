@@ -5,6 +5,11 @@ import type { DesktopBootstrapEvent, DesktopBootstrapState } from '@/global'
 import { waitBackendThroughBootstrap } from './wait-backend-through-bootstrap'
 import { isTimeoutError } from './with-timeout'
 
+/** `let` callbacks get narrowed to `never` once they are handed to the waiter (TS 6). */
+function cell<T>(): { current: T | null } {
+  return { current: null }
+}
+
 function emptyState(overrides: Partial<DesktopBootstrapState> = {}): DesktopBootstrapState {
   return {
     active: false,
@@ -50,29 +55,29 @@ describe('waitBackendThroughBootstrap', () => {
     vi.useFakeTimers()
 
     try {
-      let emit: ((ev: DesktopBootstrapEvent) => void) | null = null
-      let resolveConn: ((value: { ok: true }) => void) | null = null
+      const emit = cell<(ev: DesktopBootstrapEvent) => void>()
+      const resolveConn = cell<(value: { ok: true }) => void>()
       const connection = new Promise<{ ok: true }>(resolve => {
-        resolveConn = resolve
+        resolveConn.current = resolve
       })
 
       const desktop = {
         getBootstrapState: async () => emptyState(),
         onBootstrapEvent: (cb: (ev: DesktopBootstrapEvent) => void) => {
-          emit = cb
+          emit.current = cb
 
           return () => {
-            emit = null
+            emit.current = null
           }
         }
       }
 
       const pending = waitBackendThroughBootstrap(connection, desktop)
 
-      emit?.({ type: 'manifest', stages: [], protocolVersion: 1 })
+      emit.current?.({ type: 'manifest', stages: [], protocolVersion: 1 })
       await vi.advanceTimersByTimeAsync(300_000)
-      emit?.({ type: 'complete', marker: {} })
-      resolveConn?.({ ok: true })
+      emit.current?.({ type: 'complete', marker: {} })
+      resolveConn.current?.({ ok: true })
 
       await expect(pending).resolves.toEqual({ ok: true })
     } finally {
@@ -84,20 +89,20 @@ describe('waitBackendThroughBootstrap', () => {
     vi.useFakeTimers()
 
     try {
-      let emit: ((ev: DesktopBootstrapEvent) => void) | null = null
+      const emit = cell<(ev: DesktopBootstrapEvent) => void>()
       const desktop = {
         getBootstrapState: async () => emptyState({ active: true }),
         onBootstrapEvent: (cb: (ev: DesktopBootstrapEvent) => void) => {
-          emit = cb
+          emit.current = cb
 
           return () => {
-            emit = null
+            emit.current = null
           }
         }
       }
 
       const pending = waitBackendThroughBootstrap(new Promise<never>(() => undefined), desktop)
-      emit?.({ type: 'failed', stage: 'venv', error: 'uv sync failed' })
+      emit.current?.({ type: 'failed', stage: 'venv', error: 'uv sync failed' })
 
       await expect(pending).rejects.toThrow('uv sync failed')
     } finally {
@@ -109,10 +114,10 @@ describe('waitBackendThroughBootstrap', () => {
     vi.useFakeTimers()
 
     try {
-      let emit: ((ev: DesktopBootstrapEvent) => void) | null = null
-      let resolveConn: ((value: { ok: true }) => void) | null = null
+      const emit = cell<(ev: DesktopBootstrapEvent) => void>()
+      const resolveConn = cell<(value: { ok: true }) => void>()
       const connection = new Promise<{ ok: true }>(resolve => {
-        resolveConn = resolve
+        resolveConn.current = resolve
       })
 
       const desktop = {
@@ -126,10 +131,10 @@ describe('waitBackendThroughBootstrap', () => {
             }
           }),
         onBootstrapEvent: (cb: (ev: DesktopBootstrapEvent) => void) => {
-          emit = cb
+          emit.current = cb
 
           return () => {
-            emit = null
+            emit.current = null
           }
         }
       }
@@ -138,8 +143,8 @@ describe('waitBackendThroughBootstrap', () => {
       await Promise.resolve()
       await vi.advanceTimersByTimeAsync(300_000)
 
-      emit?.({ type: 'setup-choice', active: false })
-      resolveConn?.({ ok: true })
+      emit.current?.({ type: 'setup-choice', active: false })
+      resolveConn.current?.({ ok: true })
 
       await expect(pending).resolves.toEqual({ ok: true })
     } finally {

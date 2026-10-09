@@ -1,0 +1,27 @@
+.ide-monaco {
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+}
+
+.ide-bp {
+  background: #e51400;
+  border-radius: 50%;
+  height: 8px !important;
+  margin-left: 5px;
+  margin-top: 6px;
+  width: 8px !important;
+}
+
+.ide-bp-off {
+  background: #848484;
+  border-radius: 50%;
+  height: 8px !important;
+  margin-left: 5px;
+  margin-top: 6px;
+  width: 8px !important;
+}
+
+.ide-debug-current {
+  background: rgba(255, 213, 0, 0.18);
+}

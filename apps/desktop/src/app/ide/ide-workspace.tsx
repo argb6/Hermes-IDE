@@ -17,6 +17,7 @@ import { notifyError } from '@/store/notifications'
 import { type PreviewTarget } from '@/store/preview'
 import { openFolderAsProject, pickProjectFolder } from '@/store/projects'
 import { $reviewOpen, revealReview } from '@/store/review'
+import { $dirtyPreviewUrls } from '@/store/preview-edit'
 import { $focusedWorkspaceCwd } from '@/store/session-states'
 import { $workspaceChangeTick } from '@/store/workspace-events'
 
@@ -31,14 +32,19 @@ import {
   openIdeDocument
 } from './ide-documents'
 import { $ideSaveRequest, noteIdeEditor } from './ide-editor'
+import { lspStart } from './lsp-client'
 import { setActiveIdeEditorGroup, syncIdeEditorGroup } from './ide-editor-groups'
 import { IdeExplorer } from './ide-explorer'
 import { IdeGit } from './ide-git'
 import { GITHUB_LOGIN_COMMAND, IdeGithub } from './ide-github'
-import { $ideOpenPath, $ideReveal, $ideSideTick, noteIdeFile, noteIdeTimeline, setIdeTitle, takeIdeHistoryMove } from './ide-nav'
+import { $ideOpenPath, $ideReveal, $ideSideTick, noteIdeFile, noteIdeTimeline, requestIdeGoto, setIdeTitle, takeIdeHistoryMove } from './ide-nav'
 import { appendIdeOutput } from './ide-output'
 import { IdePanel as IdeBottomPanel, type IdeBottomTab } from './ide-panel'
+import { IdeDebugSidebar, IdeDebugToolbar } from './ide-debug'
+import { ensureDebugEvents } from './ide-debug-session'
+import { IdeExtensions } from './ide-extensions'
 import { IdeSearch } from './ide-search'
+import { $debugPhase, openIdeSearchReplace } from './ide-state'
 import {
   $ideRecentFolders,
   noteIdeRecentFolder,
@@ -58,10 +64,16 @@ interface OpenTab {
 
 const GITHUB_CLONE_RE = /^(?:https:\/\/github\.com\/[\w.-]+\/[\w.-]+(?:\.git)?\/?|git@github\.com:[\w.-]+\/[\w.-]+(?:\.git)?)$/i
 
-const PANEL_TITLE: Record<IdePanel, 'explorer' | 'git' | 'github' | 'search'> = {
+// JavaScript and TypeScript share one server; starting each id is idempotent.
+// The agent bridge never calls lsp:start, so the workspace open has to.
+const WORKSPACE_LSP_LANGUAGES = ['python', 'typescript', 'javascript', 'typescriptreact', 'javascriptreact'] as const
+
+const PANEL_TITLE: Record<IdePanel, 'explorer' | 'extensions' | 'git' | 'github' | 'run' | 'search'> = {
+  extensions: 'extensions',
   files: 'explorer',
   git: 'git',
   github: 'github',
+  run: 'run',
   search: 'search'
 }
 
@@ -97,6 +109,7 @@ function writeSize(key: 'chat' | 'side' | 'split' | 'terminal', value: number) {
 /** VS Code arrangement: activity bar, side bar, editor tabs, chat on the right. */
 export function IdeWorkspace() {
   const cwd = useStore($focusedWorkspaceCwd)
+  const debugPhase = useStore($debugPhase)
   const recentFolders = useStore($ideRecentFolders)
   const byCwd = useStore($repoStatusByCwd)
   const saved = useRef(readIdeLayout())
@@ -140,8 +153,16 @@ export function IdeWorkspace() {
   useEffect(() => registerRepoStatusCwd(cwd), [cwd])
 
   useEffect(() => {
+    ensureDebugEvents()
+  }, [])
+
+  useEffect(() => {
     if (cwd) {
       noteIdeRecentFolder(cwd)
+
+      for (const language of WORKSPACE_LSP_LANGUAGES) {
+        void lspStart({ language, workspaceRoot: cwd })
+      }
     }
   }, [cwd])
 
@@ -467,6 +488,16 @@ export function IdeWorkspace() {
         case 'go.search':
           showPanel('search')
           break
+        case 'edit.replaceFiles':
+          openIdeSearchReplace()
+          showPanel('search')
+          break
+        case 'view.run':
+          showPanel('run')
+          break
+        case 'view.extensions':
+          showPanel('extensions')
+          break
         case 'view.git':
         case 'go.git':
           showPanel('git')
@@ -544,7 +575,22 @@ export function IdeWorkspace() {
                   onOpen={path => void showFile(path)}
                 />
               )}
-                {panel === 'search' && <IdeSearch cwd={cwd} onOpen={path => void showFile(path)} />}
+                {panel === 'search' && (
+                  <IdeSearch
+                    cwd={cwd}
+                    onOpen={(path, line, column) => {
+                      if (line) {
+                        requestIdeGoto(path, line, column)
+
+                        return
+                      }
+
+                      void showFile(path)
+                    }}
+                  />
+                )}
+                {panel === 'run' && <IdeDebugSidebar />}
+                {panel === 'extensions' && <IdeExtensions />}
                 {panel === 'git' && <IdeGit cwd={cwd} onDiff={setDiff} />}
                 {panel === 'github' && (
                 <IdeGithub
@@ -599,6 +645,7 @@ export function IdeWorkspace() {
           </>
         )}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {(debugPhase !== 'idle' || panel === 'run') && <IdeDebugToolbar className="border-b border-(--ui-stroke-secondary)" />}
           <div className={cn('flex min-h-0 flex-1', split && 'gap-0')} ref={splitHostRef}>
             <div className="flex min-h-0 min-w-0" style={split ? { width: `${splitRatio * 100}%` } : { flex: 1 }}>
               <IdeEditor
@@ -820,6 +867,7 @@ function IdeEditor({
   onSplit?: () => void
 }) {
   const { t } = useI18n()
+  const dirtyUrls = useStore($dirtyPreviewUrls)
 
   const folder =
     cwd
@@ -847,7 +895,9 @@ function IdeEditor({
                   onClick={() => onSelect(tab.id)}
                   type="button"
                 >
-                  {tab.dirty && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-[#e2c08d]" />}
+                  {(tab.dirty || Boolean(dirtyUrls[tab.target.url])) && (
+                    <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-[#e2c08d]" />
+                  )}
                   <span className="truncate">{tab.target.label}</span>
                 </button>
                 <button

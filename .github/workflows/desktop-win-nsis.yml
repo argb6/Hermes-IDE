@@ -1,0 +1,53 @@
+# Local Windows x64 NSIS installer. Artifact only: no GitHub Release, no
+# signing secrets. Publish stays never (see apps/desktop/assets/nsis-packaging.md).
+name: Desktop Windows NSIS
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - 'debug+other'
+    paths:
+      - 'apps/desktop/**'
+      - '.github/workflows/desktop-win-nsis.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-win-nsis-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nsis:
+    runs-on: windows-latest
+    timeout-minutes: 180
+    env:
+      # Skip Authenticode discovery when no certificate is configured.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        # Full lockfile install. Do not omit optional dependencies:
+        # @vscode/ripgrep-win32-x64 (rg.exe) is an optional package, not a
+        # postinstall GitHub download. Do not set GH_TOKEN; this job never publishes.
+        run: npm ci
+
+      - name: Build NSIS installer
+        working-directory: apps/desktop
+        run: npm run dist:win:nsis
+
+      - name: Upload installer
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: hermes-ide-windows-nsis
+          path: apps/desktop/release/*.exe
+          if-no-files-found: error

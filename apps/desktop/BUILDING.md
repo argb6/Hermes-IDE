@@ -14,7 +14,10 @@ commands package the current desktop build; they do not stage a fresh runtime.
 
 The current MSIX manifest requires Windows 11 22H2 (`10.0.22621.0`).
 The source-script Windows support range is separate from this package floor.
-Windows desktop packaging uses MSIX, not NSIS or MSI.
+Windows release packaging uses MSIX, not MSI. Hermes-IDE also builds a local
+assisted NSIS installer (`npm run dist:win:nsis`, x64, never published).
+Ripgrep unpack, the uninstall user-data checkbox, and the CI artifact job are
+described in [assets/nsis-packaging.md](assets/nsis-packaging.md).
 
 `bundled` carries the local runtime. `store` carries the same runtime under
 Partner Center's package identity. `light` is a remote-only client without

@@ -54,7 +54,10 @@ export async function bundleElectronMain({ source, out, stamp, dev = false }) {
     bundle: true,
     platform: 'node',
     target: 'node20',
-    external: ['electron', 'node-pty', 'get-windows', 'fs'],
+    // `@vscode/ripgrep` resolves its binary with require.resolve from the real
+    // package. Bundling it would point rgPath at the bundle instead of
+    // `@vscode/ripgrep-<platform>-<arch>/bin/rg`.
+    external: ['electron', 'node-pty', 'get-windows', 'fs', '@vscode/ripgrep'],
     define,
     logLevel: 'info',
   }
@@ -65,7 +68,9 @@ export async function bundleElectronMain({ source, out, stamp, dev = false }) {
     entryPoints: [join(source, 'apps/desktop/electron/entry.ts')],
     format: 'esm',
     outfile: join(out, 'electron-main.mjs'),
-    banner: { js: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);" + envBanner },
+    // Alias the binding. Bundled ESM (fflate) also imports `createRequire`;
+    // a second top-level `import { createRequire }` is a syntax error.
+    banner: { js: "import { createRequire as __hermesCreateRequire } from 'module'; const require = __hermesCreateRequire(import.meta.url);" + envBanner },
   })
   await build({
     ...common,
