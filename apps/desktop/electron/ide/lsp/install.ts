@@ -1,8 +1,15 @@
+// Language servers SHIP INSIDE the app (package.json dependencies) — nothing is
+// downloaded at runtime. First use must work offline and must never run an npm
+// install on the user's machine (a supply-chain and first-run-latency hazard).
+// The pinned versions in ./catalog document what the installer packs.
+
 import fs from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 
-import { installedMarkerMatches, installNpmPackages, type NpmInstallDeps } from '../npm-install'
 import { LSP_SERVERS, type LspServerId, type LspServerSpec } from './catalog'
+
+const require_ = createRequire(import.meta.url)
 
 export interface PreparedLanguageServer {
   script: string
@@ -10,42 +17,48 @@ export interface PreparedLanguageServer {
   tsserverPath?: string
 }
 
+/** Directory of a bundled package exactly as the installer packed it. */
+function bundledPackageDir(name: string): string | null {
+  try {
+    return path.dirname(require_.resolve(`${name}/package.json`))
+  } catch {
+    return null
+  }
+}
+
 export async function prepareLanguageServer(
   id: LspServerId,
-  destDir: string,
-  deps: NpmInstallDeps = {}
+  _installRoot?: string
 ): Promise<{ ok: true; prepared: PreparedLanguageServer } | { ok: false; reason: string }> {
   const spec = LSP_SERVERS[id]
-  const cached = installedMarkerMatches(destDir, spec.packages)
-
-  if (!cached) {
-    const installed = await installNpmPackages(spec.packages, destDir, deps)
-
-    if (installed.ok === false) {
-      return installed
-    }
-  }
-
-  const script = resolveBin(destDir, spec)
+  const pkgDir = bundledPackageDir(spec.binPackage)
+  const script = pkgDir ? resolveBin(pkgDir, spec) : null
 
   if (!script) {
-    return { ok: false, reason: 'server-entry-missing' }
+    return { ok: false, reason: 'server-not-bundled' }
   }
 
-  const tsserverPath = path.join(destDir, 'node_modules', 'typescript', 'lib', 'tsserver.js')
+  let tsserverPath: string | undefined
+
+  if (id === 'typescript-language-server') {
+    try {
+      tsserverPath = require_.resolve('typescript/lib/tsserver.js')
+    } catch {
+      tsserverPath = undefined
+    }
+  }
 
   return {
     ok: true,
     prepared: {
       script,
       args: spec.args,
-      ...(id === 'typescript-language-server' && fs.existsSync(tsserverPath) ? { tsserverPath } : {})
+      ...(tsserverPath ? { tsserverPath } : {})
     }
   }
 }
 
-function resolveBin(destDir: string, spec: LspServerSpec): string | null {
-  const pkgDir = path.join(destDir, 'node_modules', spec.binPackage)
+function resolveBin(pkgDir: string, spec: LspServerSpec): string | null {
   let manifest: { bin?: string | Record<string, string> }
 
   try {
@@ -59,11 +72,5 @@ function resolveBin(destDir: string, spec: LspServerSpec): string | null {
   const bin = manifest.bin
   const relative = typeof bin === 'string' ? bin : bin?.[spec.binName]
 
-  if (!relative) {
-    return null
-  }
-
-  const script = path.join(pkgDir, relative)
-
-  return fs.existsSync(script) ? script : null
+  return relative ? path.join(pkgDir, relative) : null
 }

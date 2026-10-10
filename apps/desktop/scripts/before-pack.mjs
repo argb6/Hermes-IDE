@@ -54,6 +54,7 @@ import path from 'node:path'
 import { Arch } from 'electron-builder'
 import { copyNativeInputs } from './prepared-native-deps.mjs'
 import { stageRipgrep } from './stage-ripgrep.mjs'
+import { stageLspServers } from './stage-lsp-servers.mjs'
 import { removeDirSync } from './stage-native-deps.mjs'
 
 /** @param {string | null | undefined} appOutDir @returns {boolean} */
@@ -145,4 +146,7 @@ export default async function beforePack(context) {
   // Hoisted workspace packages are not under apps/desktop/node_modules; stage
   // them next to electron-main so createRequire(import.meta.url) resolves them.
   stageRipgrep({ source, out: outNodeModules, platform, arch })
+  // The language servers ship in the installer (runtime never downloads):
+  // same hoist staging as ripgrep, for electron/ide/lsp/install.ts.
+  stageLspServers({ source, out: outNodeModules })
 }

@@ -153,6 +153,12 @@ module.exports = {
       from: 'build/install-stamp.json',
       to: 'install-stamp.json'
     },
+    // The vscode-js-debug DAP bundle (fetched by scripts/fetch-js-debug.mjs at
+    // build time, never committed) — debugging must not download at runtime.
+    {
+      from: 'resources/js-debug',
+      to: 'js-debug'
+    },
     ...(['bundled', 'store'].includes(process.env.HERMES_DESKTOP_VARIANT || '')
       ? [{ from: 'build/agent-payload', to: 'agent-payload' }]
       : []),
