@@ -161,8 +161,12 @@ def _desktop_packaged_executable_in(release_dir: Path) -> Optional[Path]:
     if sys.platform == "darwin":
         candidates = list(release_dir.glob("mac*/Hermes.app/Contents/MacOS/Hermes"))
     elif sys.platform == "win32":
+        # The fork ships the renamed product executable (Hermes-IDE.exe); the
+        # upstream name is still accepted so an un-rebranded build verifies too.
         candidates = [
-            release_dir / d / "Hermes.exe" for d in ("win-unpacked", "win-ia32-unpacked", "win-arm64-unpacked")
+            release_dir / d / name
+            for d in ("win-unpacked", "win-ia32-unpacked", "win-arm64-unpacked")
+            for name in ("Hermes-IDE.exe", "Hermes.exe")
         ]
     else:
         candidates = [
