@@ -285,7 +285,10 @@ module.exports = {
     ],
     ...windowsSigning()
   },
-  // Hermes-IDE assisted installer: pick an install directory (standard NSIS).
+  // Hermes-IDE assisted installer: pick a folder. Setup nests an app-named
+  // subfolder when needed, refuses drive roots and common user/system
+  // directories, and aborts if that folder is not empty (an /updated upgrade
+  // may reuse it). It never deletes existing files.
   nsis: {
     oneClick: false,
     perMachine: false,
