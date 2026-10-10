@@ -55,7 +55,8 @@
 - **热点归因（2026-10-10，已完成）**：`--prod --cpuprofile` 在 stream-history 场景实测 top 自耗时——**shiki 语法高亮 214ms（最大项）**、`appendChild` 157ms（DOM 提交抖动）、markdown 解析（vendor-md 三个入口）合计 ~205ms、@assistant-ui 运行时消息查找 ~61ms、React 提交/协调 ~145ms、`setAttribute` 96ms（流式期间属性抖动）+ shiki oniguruma wasm 37ms。结论：卡顿主因是**流式/挂载期间的 markdown 解析 + 代码高亮 + DOM 重建**，窗口化机制之外的行内渲染开销，与“行级 store 订阅放大”假设一致。本机 --prod 基线：stream-history longtasks_n=10、longtask_max=160ms、transcript mount 534ms（dev）/ longtask 1712ms（dev）。
 - **下一步（修复循环，待续）**：① 代码块高亮按 (lang, 内容哈希) 记忆化、流式期间先渲染纯文本落定后再高亮；② 稳定行 identity 降低 appendChild/setAttribute 提交量；③ 本机 `--prod` 前后 A/B 对比（每次 ~6 分钟）。每改一处复测一处，杜绝盲改。
 - **2026-10-10 进展**：① 修好测量基建——`scripts/perf/run.mjs` 新增 `--home`/`--user-data`（或 `HERMES_PERF_HOME`/`HERMES_PERF_USER_DATA`）复用温热家目录；此前每跑一次全新 HERMES_HOME 首启 bootstrap 必超 90s 网关连接窗，指标全被重连抖动污染（"gateway did not connect"的根因）。② 排除"行级全局订阅放大"假设：`$currentModel`/`$connection` 等订阅在错误恢复叶子组件（ErrorRecoveryActions）而非每行，`$showToolActivity` 等为稳定设置项——不是放大器。③ 新教训：perf 与 dist 构建共享 dist 暂存，**不可并行**（并行会让 desktop.mjs 随机失败）。
-- **状态**：干净基线与修复循环仍待跑（测量基建已就绪，下一步用温热家目录跑 `--prod` 基线 → 修 → A/B）。
+- **2026-10-10 二轮测量（温热家目录）**：stream-history 生产态 长任务峰值 118ms、帧 p95 29.7ms（无回归）；**keystroke（打字延迟）p50 513ms / p95 978ms**——"对话卡"的本体即此。cpuprofile 呈**扁平分布**（composerCollapsedSelectionContainer、caretOffsetInEditor、cron matchRecurrence、jsx 创建各 2-6ms、无单一巨头）= 每次击键引发大范围重渲染（富编辑器+建议匹配+行组件），属**架构级**削减渲染范围工作，非单点修复。原始 profile 归档 `apps/desktop/scripts/perf/*.cpuprofile`（keystroke/stream-history 各一份）。
+- **下一步（专块）**：按 profile 缩小击键重渲染面（富编辑器文档分块记忆化、建议提供器按需短路、composer 外组件隔离），每改一处用温热家目录 keystroke A/B。
 
 ---
 
@@ -133,6 +134,14 @@
 - **适配**：`local-preview.ts` 映射 `.mermaid`/`.mmd` → `mermaid`；`preview-file.tsx` 新增 `MermaidFilePreview`（复用 RichCodeBlock 懒渲染器：主题跟随/内容缓存/点击全屏/复制 PNG，源码为加载与失败降级），预览模式对图表文件提供 渲染/源码/并排 三种，默认渲染；打开即出图，可切源码并排编辑。
 - **常见问题清单核对**：暗色主题 ✅、流式半图 ✅、大图缩放 ✅、XSS(strict) ✅、渲染缓存 ✅、Monaco 着色 ✅；唯一小瑕疵=坏图静默降级源码、无"渲染失败"提示（需 i18n 文案，未做）。
 - 测试：`preview-mermaid-file.test.tsx` 3/3 过；相邻套件与 HEAD 对拍零回归。
+
+---
+
+## 十二、机器人标签位移 + Mermaid 坏图提示 + 仓库瘦身 ✅（2026-10-10）
+
+- **点击机器人"整体变位"的根因（CDP 实测 + 代码考古）**：Bot Mode 的 routines（定时任务）面板动态注册、其 `dock.enforce` 迁移额度在**锚点缺失时也被烧掉**（`enforcedDocksThisBoot.add` 在 `if (!from || !anchor)` 之前执行）→ 面板滞留会话标签条（截图里第三标签"定时任务"）→ 随机器人模式增删 → 标签条重排=整体变位。修复：额度只在能实际应用后才记账，后续 adoption 会补迁（附 enforce-dock-retry 测试，红→绿）。用户下次启动自动修复既有滞留布局。
+- **Mermaid 坏图提示**：渲染失败不再静默变源码，显式提示"图表渲染失败，显示源码"（新增 i18n 键 en+zh，其余语言回退英文）。
+- **仓库瘦身实况**：gc+reflog 修剪仅省 43MB（.git≈1.2G）——那 5 万提交是 fork 自身历史（上游即祖先），非外来对象；**真瘦身=浅历史**（`git clone --depth 1` 重建本地克隆，GitHub 完整历史不受影响），待用户拍板。
 
 ---
 
