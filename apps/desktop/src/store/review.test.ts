@@ -469,6 +469,31 @@ describe('view state', () => {
     expect($reviewSelectedPath.get()).toBe('target.ts')
     expect($reviewDiff.get()).toBe('target diff')
   })
+
+  it('openReviewForPath widens the scope until a committed file shows up', async () => {
+    const review = stubReview({
+      list: vi.fn(async (_cwd: string, scope: string) =>
+        scope === 'lastTurn' ? { files: [file('src/a.ts')] } : { files: [] }
+      ),
+      diff: vi.fn(async () => 'a diff')
+    })
+
+    await openReviewForPath('E:/repo/src/a.ts')
+
+    expect(review.list).toHaveBeenCalledWith('/repo', 'lastTurn', null)
+    expect($reviewScope.get()).toBe('lastTurn')
+    expect($reviewSelectedPath.get()).toBe('src/a.ts')
+    expect($reviewDiff.get()).toBe('a diff')
+  })
+
+  it('openReviewForPath restores the scope when no view holds the file', async () => {
+    stubReview({ list: vi.fn(async () => ({ files: [] })) })
+
+    await openReviewForPath('gone.ts')
+
+    expect($reviewScope.get()).toBe('uncommitted')
+    expect($reviewSelectedPath.get()).toBeNull()
+  })
 })
 
 describe('mutations', () => {

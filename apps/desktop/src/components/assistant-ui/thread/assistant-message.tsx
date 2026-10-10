@@ -79,9 +79,9 @@ import { sessionTileDelegate } from '@/store/session-states'
 import { notifyThreadEditOpen } from '@/store/thread-scroll'
 import { $voicePlayback } from '@/store/voice-playback'
 
-// Stable empty identity for the settled-parts selector — a fresh [] per render
+// Stable empty identity for the settled selector — a fresh [] per render
 // would re-derive the changed-files card on every message re-render.
-const EMPTY_PARTS: readonly unknown[] = []
+const EMPTY_MESSAGES: readonly { parts: readonly unknown[] }[] = []
 
 // PERF: hoisted to module scope so the element OBJECT is identical on every
 // render of every assistant message. React bails out of re-rendering a child
@@ -481,31 +481,33 @@ const AssistantPreviewEmbeds: FC = () => {
 }
 
 /**
- * PERF leaf: owns the `settledParts` selector so the tail's settle stops
- * re-rendering the message root. This is the one status-derived selector that
- * returns an OBJECT (`s.message.parts`) rather than a primitive, so it cannot
- * bail out on identity churn — keeping it at the root meant every settle
- * re-rendered the root and everything under it.
+ * PERF leaf: owns the settled selector so the tail's settle stops re-rendering
+ * the message root. This is the one status-derived selector that returns an
+ * OBJECT rather than a primitive, so it cannot bail out on identity churn —
+ * keeping it at the root meant every settle re-rendered the root and everything
+ * under it.
  *
  * Cursor's changed-files card only appears once the turn settles: while the
  * agent is still editing, the tool rows narrate each patch and a card that
- * grew a row per write would thrash the transcript. `EMPTY_PARTS` while
+ * grew a row per write would thrash the transcript. `EMPTY_MESSAGES` while
  * running keeps this selector referentially stable across the 30 Hz delta
  * stream.
  *
  * It also only rides the LAST turn. The card is a "here's what just landed"
  * summary, not a per-turn artifact: leaving one behind on every reply would
  * stack a wall of stale cards down the transcript. Sending the next message
- * retires it — the working tree it describes is already history by then.
+ * retires it. The ROWS, though, cover the whole conversation (see
+ * ChangedFilesCard) — this hands it every message so the summary at the end of
+ * a session doesn't read as "only the last file changed".
  */
 const SettledChangedFiles: FC = () => {
-  const settledParts = useAuiState(s => {
+  const settledMessages = useAuiState(s => {
     const isLastMessage = s.thread.messages[s.thread.messages.length - 1]?.id === s.message.id
 
-    return s.message.status?.type === 'running' || !isLastMessage ? EMPTY_PARTS : s.message.parts
+    return s.message.status?.type === 'running' || !isLastMessage ? EMPTY_MESSAGES : s.thread.messages
   })
 
-  return <ChangedFilesCard parts={settledParts} />
+  return <ChangedFilesCard messages={settledMessages} />
 }
 
 /**

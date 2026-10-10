@@ -20,16 +20,22 @@ const MAX_ROWS_HEIGHT = '9.375rem'
 
 /**
  * Cursor-style "N files changed" summary closing out the newest assistant turn:
- * one row per file it edited with that file's +/-, and a Review action opening
- * the diff pane (⌘G). A row click opens that file's diff directly.
+ * one row per file the CONVERSATION edited with that file's +/−, and a Review
+ * action opening the diff pane (⌘G). A row click opens that file's diff
+ * directly.
+ *
+ * Rows are conversation-wide on purpose: a per-turn list read as "only todo
+ * changed" at the end of a session that had touched twenty files, and users
+ * trusted the number. One card still rides the last turn only (see
+ * SettledChangedFiles) — the union lives in the rows, not in more cards.
  *
  * Wears the shared `WIDGET_SHELL_CLASS` so it reads as the same panel as the
  * transcript's other inline widgets rather than inventing its own chrome.
  */
-export const ChangedFilesCard: FC<{ parts: readonly unknown[] }> = ({ parts }) => {
+export const ChangedFilesCard: FC<{ messages: readonly { parts: readonly unknown[] }[] }> = ({ messages }) => {
   const { t } = useI18n()
   const copy = t.assistant.thread
-  const files = useMemo(() => deriveChangedFiles(parts), [parts])
+  const files = useMemo(() => deriveChangedFiles(messages.flatMap(message => message.parts)), [messages])
   // Review THIS surface's repo: a tile transcript pins the pane to the tile's
   // worktree; the primary passes null (follow the active session, as before).
   const view = useSessionView()

@@ -74,6 +74,17 @@
 
 ---
 
+## 五、对话“已修改文件”卡片 × 审查联动 ✅ 已修复（2026-10-10）
+
+1. **点击卡片里的文件行，审查面板没反应** ✅
+   - **根因**：`openReviewForPath` 只在审查当前 scope（默认 `uncommitted`=未提交变更）里找文件；助手边干边提交/推送时文件早已入库，列表匹配不到就**静默无动作**。
+   - **修复**：`store/review.ts` 按 `uncommitted → lastTurn → branch` 逐级扩大 scope 找到即选中；全部落空则恢复用户原 scope。已测（含既有防抖用例回归）。
+2. **对话结束后卡片只显示“todo 改了”，其他文件不提** ✅
+   - **根因**：`ChangedFilesCard` 只汇总**最后一轮**的 parts（设计如此），会话末尾只剩最后一轮的文件行，用户误以为整个对话只改了这些。
+   - **修复**：卡片仍只挂在最后一轮，但行覆盖**整个对话**的所有编辑（`assistant-message.tsx` 传入全部 messages，按路径合并、± 累加）。已测：跨轮同一文件保持单行、各轮文件齐全。
+
+---
+
 ## 附：环境备忘（不影响仓库代码）
 
 - 本机 `node_modules` 曾有 8 个包解压损坏（`radix-ui`、`shiki`、`streamdown`、`@streamdown/code`、`@streamdown/math`、`remend`、`cross-env`、`@audiowave/react`、`@nous-research/ui`）——这是之前大批 vitest 测试文件“无法运行”的根因，**已修复**。

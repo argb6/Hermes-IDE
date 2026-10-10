@@ -489,7 +489,12 @@ function matchReviewFile(files: readonly HermesReviewFile[], path: string): Herm
 
 /**
  * Open the review pane on one file's diff. The path comes from a tool call, so
- * it may be absolute while git reports repo-relative — match on the tail.
+ * it may be absolute while git reports repo-relative — match on the tail. The
+ * clicked file may already be COMMITTED (an agent that ships as it works) while
+ * the pane sits on the uncommitted scope — the match then misses and the click
+ * reads as dead. Widen the scope (lastTurn, then branch) until the file shows
+ * up, exactly as if the user had clicked through the scope tabs; when no view
+ * holds the file at all, restore the scope the user had.
  */
 export async function openReviewForPath(
   path: string,
@@ -498,16 +503,33 @@ export async function openReviewForPath(
 ): Promise<void> {
   revealReview(scopeCwd, scopeTarget)
   const cwd = repoCwd()
-  const refreshed = await refreshReview()
+  const originalScope = $reviewScope.get()
+  const scopes: HermesReviewScope[] = ['uncommitted', 'lastTurn', 'branch']
 
-  if (!refreshed || repoCwd() !== cwd) {
-    return
+  for (const scope of scopes.slice(Math.max(0, scopes.indexOf(originalScope)))) {
+    if ($reviewScope.get() !== scope) {
+      $reviewScope.set(scope)
+      clearReviewSelection()
+    }
+
+    const refreshed = await refreshReview()
+
+    if (!refreshed || repoCwd() !== cwd) {
+      return
+    }
+
+    const file = matchReviewFile($reviewFiles.get(), path)
+
+    if (file) {
+      await selectReviewFile(file)
+      return
+    }
   }
 
-  const file = matchReviewFile($reviewFiles.get(), path)
-
-  if (file) {
-    await selectReviewFile(file)
+  if ($reviewScope.get() !== originalScope) {
+    $reviewScope.set(originalScope)
+    clearReviewSelection()
+    void refreshReview()
   }
 }
 
