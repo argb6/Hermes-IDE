@@ -272,6 +272,50 @@ describe('frost and area', () => {
     setTranslucencyMode('clear')
     expect(document.documentElement.hasAttribute('data-hermes-glass-scope')).toBe(false)
   })
+
+  // The seam must follow the rail's real side: after ⌘\ (or a pane drag) the
+  // sidebar sits on the RIGHT, and a seam still measured from the left paints
+  // glass over the content and opaque chrome over the rail — the mixed
+  // translucent/opaque field seen on the flipped layout. Geometry decides the
+  // side, so RTL rides the same path.
+  it('mirrors the glass seam to whichever side the rail sits on', () => {
+    const rail = document.createElement('div')
+
+    rail.dataset.slot = 'sidebar'
+    document.body.appendChild(rail)
+
+    const place = (left: number, width: number) => {
+      rail.getBoundingClientRect = () =>
+        ({ bottom: 600, height: 600, left, right: left + width, top: 0, width }) as DOMRect
+      window.dispatchEvent(new Event('resize'))
+    }
+
+    setTranslucency(50)
+    setTranslucencyScope('sidebar')
+
+    if (!GLASS_SUPPORTED) {
+      rail.remove()
+
+      return
+    }
+
+    place(window.innerWidth - 200, 200)
+    setTranslucencyMode('glass')
+
+    expect(document.documentElement.getAttribute('data-hermes-glass-rail')).toBe('right')
+    // Right rail: the seam is the rail's distance from the window's right edge.
+    expect(document.documentElement.style.getPropertyValue('--glass-rail-edge')).toBe('200px')
+
+    place(0, 320)
+
+    expect(document.documentElement.getAttribute('data-hermes-glass-rail')).toBe('left')
+    // Left rail: the seam is the rail's right edge.
+    expect(document.documentElement.style.getPropertyValue('--glass-rail-edge')).toBe('320px')
+
+    rail.remove()
+    setTranslucencyMode('clear')
+    expect(document.documentElement.hasAttribute('data-hermes-glass-rail')).toBe(false)
+  })
 })
 
 // A held slider drag and a timed pulse from a picker click can overlap, which

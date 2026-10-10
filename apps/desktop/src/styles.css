@@ -667,9 +667,10 @@
   /* Sidebar scope (the Finder shape): glass rail, opaque content column.
      <body> stays the one painter but splits at the rail's visual edge — the
      store publishes it as --glass-rail-edge (live-tracked through collapse
-     animation and pane resizes). Left of the seam: the normal glass mix.
-     Right of it: the full opaque chrome. A hard gradient stop, so there is
-     no smear across the seam; RTL mirrors via html[dir='rtl']. The content
+     animation, pane resizes and side flips) together with the side the rail
+     actually sits on (`data-hermes-glass-rail`), so the mirrored layout (⌘\)
+     and RTL mirror the split instead of painting glass over the content. A
+     hard gradient stop, so there is no smear across the seam; the content
      column's own surfaces stay transparent (they'd double-paint the tint
      otherwise) — the body backdrop alone restores the opaque look. */
   :root[data-hermes-glass][data-hermes-glass-scope='sidebar'] body {
@@ -681,7 +682,7 @@
     );
   }
 
-  :root[data-hermes-glass][data-hermes-glass-scope='sidebar'][dir='rtl'] body {
+  :root[data-hermes-glass][data-hermes-glass-scope='sidebar'][data-hermes-glass-rail='right'] body {
     background: linear-gradient(
       to left,
       color-mix(in srgb, var(--ui-bg-chrome) var(--translucency-glass-keep, 100%), transparent)

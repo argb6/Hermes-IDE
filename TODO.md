@@ -23,10 +23,10 @@
   - 与窗口尺寸相关的定位（最大化后宽度变化触发错位）。
 - **状态**：未修，需要在有真实布局的实例里做命中测试（`document.elementFromPoint` 扫描）确认遮挡层。
 
-### 3. 缩小窗口后“透明模糊 / 不透明”两种模式随机混搭
+### 3. 缩小窗口后“透明模糊 / 不透明”两种模式随机混搭 ✅ 已修复（2026-10-10）
 
 - **现象**：侧栏换到左边后，缩小窗口，整个 UI 一部分透明模糊、一部分不透明，混在一起。
-- **根因（已定位，未修）**：glass 透明模式的分界线**不支持侧栏翻转**：
+- **根因（已修复）**：glass 透明模式的分界线**不支持侧栏翻转**：
   - `apps/desktop/src/store/translucency.ts` → `measureRailEdge()` 计算 `--glass-rail-edge` 时只处理了 RTL（`direction === 'rtl'`），没有处理 `panesFlipped`；
   - `apps/desktop/src/styles.css` 的 `:root[data-hermes-glass][data-hermes-glass-scope='sidebar'] body` 用固定 `linear-gradient(to right, …)` 把“玻璃区 / 不透明区”按左右切分。
   - 侧栏在右边时：导轨的 `rect.right` 落到窗口右缘 → 分界值错误 → 玻璃/不透明落在错误的一侧，再叠加 `[data-glass-opaque]` 元素保持填充，视觉上就是“随机混搭”。

@@ -162,14 +162,19 @@ export const isChatWindow = (search = typeof window === 'undefined' ? '' : windo
 }
 
 /* Sidebar scope needs the rail's visual edge published on :root so <body>
-   can split its paint there (glass left of the seam, opaque chrome right of
-   it — the Finder shape). The rail is an in-flow div whose WIDTH animates
-   (components/ui/sidebar.tsx, collapsible='none' branch), so a
-   ResizeObserver sees every collapse/expand frame; a window resize listener
-   and a re-measure on every store sync cover the rest. RTL flips which side
-   the seam is measured from; styles.css picks the matching gradient
-   direction off html[dir]. */
+   can split its paint there (glass on the rail's side of the seam, opaque
+   chrome across the content — the Finder shape). The rail is an in-flow div
+   whose WIDTH animates (components/ui/sidebar.tsx, collapsible='none'
+   branch), so a ResizeObserver sees every collapse/expand frame; a window
+   resize listener, a re-measure on every store sync and a childList watch on
+   the rail's parent cover the rest — the rail can change SIDE (⌘\ flip, a
+   pane drag, RTL) without changing size, which no resize signal sees. The
+   side is derived from the rail's GEOMETRY, so the mirrored layout and RTL
+   ride the same path; styles.css picks the gradient direction off
+   `data-hermes-glass-rail`. */
 let railObserver: null | ResizeObserver = null
+let railParentObserver: null | MutationObserver = null
+let railParentTarget: Element | null = null
 let railTarget: Element | null = null
 let railTrackingOn = false
 
@@ -189,19 +194,36 @@ const measureRailEdge = (): void => {
     }
   }
 
+  const parent = rail?.parentElement ?? null
+
+  if (parent !== railParentTarget) {
+    railParentObserver?.disconnect()
+    railParentTarget = parent
+
+    if (parent) {
+      railParentObserver ??= new MutationObserver(() => measureRailEdge())
+      railParentObserver.observe(parent, { childList: true })
+    }
+  }
+
   if (!rail) {
     // No rail in this window (e.g. a pane-only layout): the seam sits at the
     // window edge and the whole field stays opaque — glass simply waits for
     // a rail to exist.
     root.style.setProperty('--glass-rail-edge', '0px')
+    root.removeAttribute('data-hermes-glass-rail')
 
     return
   }
 
   const rect = rail.getBoundingClientRect()
-  const rtl = getComputedStyle(root).direction === 'rtl'
-  const edge = rtl ? window.innerWidth - rect.left : rect.right
+  // Which side the glass goes on is wherever the rail actually sits: flipping
+  // (⌘\) or dragging the pane mirrors the layout, and RTL mirrors the page —
+  // a side read off geometry cannot fall out of step with either.
+  const railOnRight = rect.left + rect.width / 2 > window.innerWidth / 2
+  const edge = railOnRight ? window.innerWidth - rect.left : rect.right
 
+  root.dataset.hermesGlassRail = railOnRight ? 'right' : 'left'
   root.style.setProperty('--glass-rail-edge', `${Math.max(0, Math.round(edge))}px`)
 }
 
@@ -244,9 +266,13 @@ const stopRailTracking = (): void => {
     railObserver.unobserve(railTarget)
   }
 
+  railParentObserver?.disconnect()
+  railParentObserver = null
+  railParentTarget = null
   railTarget = null
   window.removeEventListener('resize', measureRailEdge)
   document.documentElement.style.removeProperty('--glass-rail-edge')
+  document.documentElement.removeAttribute('data-hermes-glass-rail')
 }
 
 /* Peek: while the user is actively adjusting translucency from Settings, the
