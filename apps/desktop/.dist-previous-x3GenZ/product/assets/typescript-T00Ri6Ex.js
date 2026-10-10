@@ -1,1 +1,0 @@
-import{n as e,t}from"./typescript-DdNQO13S.js";export{t as conf,e as language};

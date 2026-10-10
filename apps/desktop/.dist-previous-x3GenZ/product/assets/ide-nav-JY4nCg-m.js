@@ -1,1 +1,0 @@
-import{h as e}from"./ide-nav-C3KUVMYQ.js";export{e as requestIdeOpen};
