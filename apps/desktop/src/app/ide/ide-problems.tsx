@@ -23,8 +23,13 @@ export function IdeProblems() {
           onClick={() => requestIdeGoto(item.path, item.line, item.character)}
           type="button"
         >
-          <span className={cn('shrink-0', item.severity === 2 ? 'text-[#cca700]' : 'text-[#f14c4c]')}>
-            {item.severity === 2 ? t.ide.problemsWarn : t.ide.problemsError}
+          <span
+            className={cn(
+              'shrink-0',
+              item.severity === 2 ? 'text-[#cca700]' : item.severity >= 3 ? 'text-[#3794ff]' : 'text-[#f14c4c]'
+            )}
+          >
+            {item.severity === 2 ? t.ide.problemsWarn : item.severity >= 3 ? t.ide.problemsInfo : t.ide.problemsError}
           </span>
           <span className="min-w-0 flex-1 truncate">{item.message}</span>
           <span className="shrink-0 text-muted-foreground">

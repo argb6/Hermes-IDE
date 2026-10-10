@@ -1,14 +1,11 @@
 import { type DragEvent as ReactDragEvent, useRef, useState } from 'react'
 
 import { triggerHaptic } from '@/lib/haptics'
-import { $terminalBackend } from '@/store/session'
-import { isSessionRemote } from '@/store/session-states'
 
 import {
+  type DroppedFile,
   extractDroppedFiles,
-  HERMES_PATHS_MIME,
-  type OsDropStagingContext,
-  partitionDroppedFiles
+  HERMES_PATHS_MIME
 } from '../../hooks/use-composer-actions'
 import { dragHasAttachments, droppedFileInlineRefs, type InlineRefInput } from '../inline-refs'
 import type { ChatBarProps } from '../types'
@@ -19,23 +16,32 @@ interface UseComposerDropArgs {
   onAttachDroppedItems: ChatBarProps['onAttachDroppedItems']
   recordUndoPoint: () => void
   requestMainFocus: () => void
-  sessionId?: string | null
+}
+
+/** Line ranges and links are mentions and stay inline `@line:`/`@url:` chips;
+ *  files and folders become attachment capsules — the composer shows a file
+ *  card instead of a chunk of path text. The capsule's `refText` submits the
+ *  same `@file:` ref the gateway already resolves, so this is display-only. */
+function splitDrops(candidates: DroppedFile[]): { files: DroppedFile[]; mentions: DroppedFile[] } {
+  return {
+    files: candidates.filter(candidate => !candidate.line && !candidate.url),
+    mentions: candidates.filter(candidate => Boolean(candidate.line) || Boolean(candidate.url))
+  }
 }
 
 /**
- * Drag-and-drop attachment engine. Splits drops by origin: in-app drags
- * (project tree / gutter) stay inline `@file:`/`@line:` refs the gateway
- * resolves directly; OS/Finder drops (absolute local paths a remote gateway
- * can't read, image bytes vision needs) route through the upload pipeline.
- * Off the keystroke path; consumes `insertInlineRefs` + the attach handler.
+ * Drag-and-drop attachment engine. Line-range and link drops stay inline
+ * `@line:`/`@url:` mentions; files and folders — in-app project-tree drags and
+ * OS/Finder drops alike — land as attachment capsules through the attach
+ * handler. Off the keystroke path; consumes `insertInlineRefs` + the attach
+ * handler.
  */
 export function useComposerDrop({
   cwd,
   insertInlineRefs,
   onAttachDroppedItems,
   recordUndoPoint,
-  requestMainFocus,
-  sessionId
+  requestMainFocus
 }: UseComposerDropArgs) {
   const [dragActive, setDragActive] = useState(false)
   const dragDepthRef = useRef(0)
@@ -44,16 +50,6 @@ export function useComposerDrop({
     dragDepthRef.current = 0
     setDragActive(false)
   }
-
-  // Staging inputs for OS drops, read at drop time (#52427): a local
-  // connection on a shared filesystem keeps non-image OS drops as
-  // original-path inline refs; remote / container / cross-filesystem
-  // backends still stage. Mirrors uploadComposerAttachment's byte decision.
-  const osDropStaging = (): OsDropStagingContext => ({
-    backendCwd: cwd,
-    remote: isSessionRemote(sessionId),
-    terminalBackend: $terminalBackend.get()
-  })
 
   const handleDragEnter = (event: ReactDragEvent<HTMLFormElement>) => {
     if (!onAttachDroppedItems || !dragHasAttachments(event.dataTransfer, HERMES_PATHS_MIME)) {
@@ -104,20 +100,15 @@ export function useComposerDrop({
       return
     }
 
-    // In-app drags (project tree / gutter) are workspace-relative paths the
-    // gateway resolves directly, so they stay inline @file:/@line: refs. OS
-    // drops are absolute local paths a remote gateway can't read (and images
-    // need byte upload for vision), so route them through the upload pipeline
-    // — unless the backend resolves this machine's paths as-is (#52427).
-    const { inAppRefs, osDrops } = partitionDroppedFiles(candidates, osDropStaging())
-    const refs = droppedFileInlineRefs(inAppRefs, cwd)
+    const { files, mentions } = splitDrops(candidates)
+    const refs = droppedFileInlineRefs(mentions, cwd)
 
     if (refs.length && insertInlineRefs(refs)) {
       triggerHaptic('selection')
     }
 
-    if (osDrops.length) {
-      void Promise.resolve(onAttachDroppedItems(osDrops)).then(attached => {
+    if (files.length) {
+      void Promise.resolve(onAttachDroppedItems(files)).then(attached => {
         if (attached) {
           triggerHaptic('selection')
           requestMainFocus()
@@ -156,21 +147,19 @@ export function useComposerDrop({
     event.stopPropagation()
     resetDragState()
 
-    // Dropping straight onto the text box used to inline-ref *every* file —
-    // including OS/Finder drops, whose absolute local path a remote gateway
-    // can't read and whose image bytes never reached vision. Split by origin:
-    // in-app drags stay inline refs; OS drops go through the upload pipeline.
-    // (When no upload handler is wired, fall back to inline refs for all.)
+    // Dropping straight onto the text box lands files as attachment capsules
+    // like every other drop; only line-range and link mentions stay inline.
+    // (When no attach handler is wired, fall back to inline refs for all.)
     const attach = onAttachDroppedItems
-    const { inAppRefs, osDrops } = partitionDroppedFiles(candidates, osDropStaging())
-    const refs = droppedFileInlineRefs(attach ? inAppRefs : candidates, cwd)
+    const { files, mentions } = splitDrops(candidates)
+    const refs = droppedFileInlineRefs(attach ? mentions : candidates, cwd)
 
     if (refs.length && insertInlineRefs(refs)) {
       triggerHaptic('selection')
     }
 
-    if (attach && osDrops.length) {
-      void Promise.resolve(attach(osDrops)).then(attached => {
+    if (attach && files.length) {
+      void Promise.resolve(attach(files)).then(attached => {
         if (attached) {
           triggerHaptic('selection')
           requestMainFocus()

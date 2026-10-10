@@ -32,6 +32,20 @@ import 'monaco-editor/min/vs/editor/editor.main.css'
 ensureMonacoEnvironment()
 registerLspProviders()
 
+// Monaco's in-browser TS/JS checker knows nothing about the project — no
+// tsconfig, no node_modules — so it paints "Cannot find module" over valid
+// code and its squiggles pile up beside the language server's. The
+// project-aware servers (pyright, typescript-language-server) are the only
+// validators; the workers stay for their editor smarts.
+monaco.typescript.typescriptDefaults.setDiagnosticsOptions({
+  noSemanticValidation: true,
+  noSyntaxValidation: true
+})
+monaco.typescript.javascriptDefaults.setDiagnosticsOptions({
+  noSemanticValidation: true,
+  noSyntaxValidation: true
+})
+
 monaco.languages.registerDocumentFormattingEditProvider('json', {
   provideDocumentFormattingEdits(model) {
     const result = tryFormatJson(model.getValue())

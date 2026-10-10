@@ -717,6 +717,7 @@ export const en: Translations = {
     lspCrashed: 'crashed',
     problemsError: 'Error',
     problemsWarn: 'Warning',
+    problemsInfo: 'Info',
     debugStart: 'Start debugging',
     debugPause: 'Pause',
     debugContinue: 'Continue',
@@ -743,6 +744,8 @@ export const en: Translations = {
     extensionsUnavailable: 'The extension service is offline.',
     extensionsDeclarative: 'Themes, grammars, snippets, and language configuration only.',
     extensionsRejected: 'This extension runs code and was not installed.',
+    extensionsDownloads: count => `${count} downloads`,
+    extensionsProvides: 'Provides',
     menu: {
       file: 'File',
       edit: 'Edit',

@@ -252,6 +252,8 @@ export interface InstalledExtension {
   version: string
   displayName?: string
   description?: string
+  /** Icon rendered inline: a data URL read from the unpacked extension. */
+  iconUrl?: string
   path: string
   contributes: ExtensionContributes
 }
@@ -264,6 +266,7 @@ export interface ExtensionSearchHit {
   displayName?: string
   description?: string
   downloadCount?: number
+  iconUrl?: string
 }
 
 export interface ExtensionSearchResult {

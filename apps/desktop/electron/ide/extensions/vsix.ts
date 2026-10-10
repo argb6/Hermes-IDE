@@ -126,14 +126,56 @@ export function readInstalledExtension(destDir: string, id: string): InstalledEx
   }
 
   const version = typeof manifest.version === 'string' ? manifest.version : '0.0.0'
+  const iconUrl = iconDataUrl(manifest, destDir)
 
   return {
     id,
     version,
     ...(typeof manifest.displayName === 'string' ? { displayName: manifest.displayName } : {}),
     ...(typeof manifest.description === 'string' ? { description: manifest.description } : {}),
+    ...(iconUrl ? { iconUrl } : {}),
     path: destDir,
     contributes: readContributes(manifest.contributes, destDir)
+  }
+}
+
+const ICON_MAX_BYTES = 512 * 1024
+
+/** The manifest `icon` is a relative path inside the extension; it ships as a
+ *  data URL so the renderer needs no extra file channel to show it. */
+function iconDataUrl(manifest: Record<string, unknown>, root: string): string | undefined {
+  const file = containedPath(root, manifest.icon)
+
+  if (!file) {
+    return undefined
+  }
+
+  try {
+    const bytes = fs.readFileSync(file)
+
+    if (bytes.length > ICON_MAX_BYTES) {
+      return undefined
+    }
+
+    return `data:${iconMime(file)};base64,${bytes.toString('base64')}`
+  } catch {
+    return undefined
+  }
+}
+
+function iconMime(file: string): string {
+  switch (path.extname(file).toLowerCase()) {
+    case '.svg':
+      return 'image/svg+xml'
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg'
+    case '.gif':
+      return 'image/gif'
+    case '.webp':
+      return 'image/webp'
+    default:
+      return 'image/png'
   }
 }
 

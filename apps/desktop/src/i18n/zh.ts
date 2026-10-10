@@ -504,6 +504,7 @@ export const zh = defineLocale({
     lspCrashed: '已崩溃',
     problemsError: '错误',
     problemsWarn: '警告',
+    problemsInfo: '信息',
     debugStart: '开始调试',
     debugPause: '暂停',
     debugContinue: '继续',
@@ -530,6 +531,8 @@ export const zh = defineLocale({
     extensionsUnavailable: '扩展服务离线。',
     extensionsDeclarative: '仅支持主题、语法、代码片段和语言配置。',
     extensionsRejected: '这个扩展包含代码，没有安装。',
+    extensionsDownloads: count => `${count} 次下载`,
+    extensionsProvides: '提供的能力',
     menu: {
       file: '文件',
       edit: '编辑',

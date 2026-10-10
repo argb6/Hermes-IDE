@@ -1,5 +1,6 @@
-import { atom } from 'nanostores'
+import { atom, computed, type ReadableAtom } from 'nanostores'
 
+import type { ExtensionRow } from './ext-client'
 import type { LspState } from './ipc-types'
 
 const WRAP_KEY = 'hermes.desktop.ide.wordWrap'
@@ -60,6 +61,72 @@ export const $ideDiagnostics = atom<IdeDiagnostic[]>([])
 
 export function replaceDiagnostics(uri: string, items: IdeDiagnostic[]) {
   $ideDiagnostics.set([...$ideDiagnostics.get().filter(item => item.uri !== uri), ...items])
+}
+
+export interface FileProblems {
+  errors: number
+  warnings: number
+}
+
+const NO_PROBLEMS: FileProblems = { errors: 0, warnings: 0 }
+
+function problemKey(path: string) {
+  return path.replace(/\\/g, '/').toLowerCase()
+}
+
+function countProblems(items: IdeDiagnostic[], key: string): FileProblems {
+  let errors = 0
+  let warnings = 0
+
+  for (const item of items) {
+    if (problemKey(item.path) !== key) {
+      continue
+    }
+
+    if (item.severity <= 1) {
+      errors += 1
+    } else if (item.severity === 2) {
+      warnings += 1
+    }
+  }
+
+  return errors === 0 && warnings === 0 ? NO_PROBLEMS : { errors, warnings }
+}
+
+const problemStores = new Map<string, ReadableAtom<FileProblems>>()
+
+/** Per-file problem counts for file rows and editor tabs. One memoized store
+ *  per path (like `repoChangeKindForPath`), so a row re-renders only when its
+ *  own file's counts change. */
+export function problemStoreForPath(path: string): ReadableAtom<FileProblems> {
+  const key = problemKey(path)
+  const existing = problemStores.get(key)
+
+  if (existing) {
+    return existing
+  }
+
+  const store = computed($ideDiagnostics, items => countProblems(items, key))
+
+  problemStores.set(key, store)
+
+  return store
+}
+
+/** Install/uninstall asked for outside the extensions panel (the detail view
+ *  in the file preview area). The panel owns the store, so it listens here
+ *  and keeps its list and the open detail in step. */
+export const $ideExtensionAction = atom<ExtensionRow | null>(null)
+
+export function requestExtensionToggle(row: ExtensionRow) {
+  $ideExtensionAction.set(row)
+}
+
+/** The store ran an install/uninstall; the extensions panel re-pulls its list. */
+export const $ideExtensionChangeTick = atom(0)
+
+export function noteIdeExtensionChange() {
+  $ideExtensionChangeTick.set($ideExtensionChangeTick.get() + 1)
 }
 
 export interface IdeBreakpoint {

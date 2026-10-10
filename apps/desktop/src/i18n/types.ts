@@ -746,6 +746,7 @@ export interface Translations {
     lspCrashed: string
     problemsError: string
     problemsWarn: string
+    problemsInfo: string
     debugStart: string
     debugPause: string
     debugContinue: string
@@ -772,6 +773,8 @@ export interface Translations {
     extensionsUnavailable: string
     extensionsDeclarative: string
     extensionsRejected: string
+    extensionsDownloads: (count: number) => string
+    extensionsProvides: string
     menu: {
       file: string
       edit: string

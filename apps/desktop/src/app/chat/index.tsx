@@ -70,7 +70,7 @@ import {
 } from './composer/scope'
 import type { ChatBarState } from './composer/types'
 import { useHistoryWindow } from './history-window'
-import { type DroppedFile, partitionDroppedFiles } from './hooks/use-composer-actions'
+import { type DroppedFile } from './hooks/use-composer-actions'
 import { type DragKind, useFileDropZone } from './hooks/use-file-drop-zone'
 import { shouldShowIntro } from './intro-visibility'
 import { ProfileTag } from './profile-tag'
@@ -756,22 +756,24 @@ const ChatViewContent = memo(function ChatViewContent({
   )
 
   // Drop files anywhere in the conversation area, not just on the composer
-  // input. In-app drags (project tree / gutter) carry workspace-relative paths
-  // the gateway resolves directly, so they stay inline `@file:` refs. OS/Finder
-  // drops carry absolute local paths that don't exist on a remote gateway (and
-  // images need byte upload for vision), so route them through the attachment
-  // pipeline — otherwise the local path leaks into the prompt verbatim.
+  // input. Line-range and link mentions stay inline `@line:`/`@url:` chips;
+  // files and folders land as attachment capsules — a file card, never a
+  // chunk of raw path text. The capsule's `refText` submits the same `@file:`
+  // ref the gateway already resolves.
   const onDropFiles = useCallback(
     (candidates: DroppedFile[]) => {
-      const { inAppRefs, osDrops } = partitionDroppedFiles(candidates)
-      const refs = droppedFileInlineRefs(inAppRefs, currentCwd)
+      const files = candidates.filter(candidate => !candidate.line && !candidate.url)
+      const refs = droppedFileInlineRefs(
+        candidates.filter(candidate => Boolean(candidate.line) || Boolean(candidate.url)),
+        currentCwd
+      )
 
       if (refs.length) {
         requestComposerInsert(refs.join(' '), { mode: 'inline', target: composerScope.target })
       }
 
-      if (osDrops.length) {
-        void onAttachDroppedItems(osDrops)
+      if (files.length) {
+        void onAttachDroppedItems(files)
       }
     },
     [composerScope.target, currentCwd, onAttachDroppedItems]

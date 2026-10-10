@@ -3,6 +3,7 @@ import { type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useRe
 import { useMemo } from 'react'
 import { type NodeApi, type NodeRendererProps, type RowRendererProps, Tree, type TreeApi } from 'react-arborist'
 
+import { problemStoreForPath } from '@/app/ide/ide-state'
 import { TreeSkeleton } from '@/components/chat/skeletons'
 import { Codicon } from '@/components/ui/codicon'
 import { markRightPanePerf } from '@/debug/right-pane-events'
@@ -353,6 +354,8 @@ function ProjectTreeRow({
   const change: RepoFileChange | undefined = useStore(changeStore)
   const folderStore = useMemo(() => repoFolderChangeForPath(path), [path])
   const folderChange = useStore(folderStore)
+  const problemStore = useMemo(() => problemStoreForPath(path), [path])
+  const problems = useStore(problemStore)
 
   markRightPanePerf('project-tree-row-render', path)
 
@@ -465,7 +468,7 @@ function ProjectTreeRow({
         <>
           <span
             className={cn('min-w-0 flex-1 truncate', !isFolder && change?.mark === 'D' && 'line-through')}
-            style={markColor ? { color: markColor } : undefined}
+            style={{ color: problems.errors > 0 ? '#f14c4c' : markColor }}
           >
             {node.data.name}
           </span>
@@ -480,6 +483,12 @@ function ProjectTreeRow({
               }
             >
               {isFolder ? folderChange?.change.mark : change?.mark}
+            </span>
+          )}
+          {!isFolder && !isPlaceholder && (problems.errors > 0 || problems.warnings > 0) && (
+            <span className="flex shrink-0 items-center gap-1 pl-1 text-[10px] font-medium">
+              {problems.errors > 0 && <span className="text-[#f14c4c]">{problems.errors}</span>}
+              {problems.warnings > 0 && <span className="text-[#cca700]">{problems.warnings}</span>}
             </span>
           )}
         </>

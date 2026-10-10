@@ -5,7 +5,7 @@ import path from 'node:path'
 import { strToU8, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
 
-import { codeExtensionFields, inspectVsix, unpackExtension } from './vsix'
+import { codeExtensionFields, inspectVsix, readInstalledExtension, unpackExtension } from './vsix'
 
 function vsix(manifest: Record<string, unknown>, files: Record<string, string> = {}): Uint8Array {
   const entries: Record<string, Uint8Array> = {
@@ -107,5 +107,33 @@ describe('vsix code-extension rejection', () => {
 
   it('treats an empty main string as declarative', () => {
     expect(codeExtensionFields({ main: '  ', browser: '' })).toEqual([])
+  })
+})
+
+describe('vsix icons', () => {
+  function extensionDir(manifest: Record<string, unknown>, files: Record<string, string> = {}): string {
+    const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'hermes-vsix-'))
+
+    fs.writeFileSync(path.join(dest, 'package.json'), JSON.stringify(manifest))
+
+    for (const [name, text] of Object.entries(files)) {
+      fs.writeFileSync(path.join(dest, name), text)
+    }
+
+    return dest
+  }
+
+  it('ships the manifest icon as a data URL the renderer can inline', () => {
+    const dest = extensionDir({ ...theme, icon: './icon.png' }, { 'icon.png': 'png-bytes' })
+
+    expect(readInstalledExtension(dest, 'ada.quiet')?.iconUrl).toBe(
+      `data:image/png;base64,${Buffer.from('png-bytes').toString('base64')}`
+    )
+  })
+
+  it('drops an icon that climbs out of the extension directory', () => {
+    const dest = extensionDir({ ...theme, icon: '../evil.png' }, { 'icon.png': 'png-bytes' })
+
+    expect(readInstalledExtension(dest, 'ada.quiet')?.iconUrl).toBeUndefined()
   })
 })

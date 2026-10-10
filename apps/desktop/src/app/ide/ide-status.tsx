@@ -57,7 +57,7 @@ export function IdeStatusBar({
   useEffect(() => registerRepoStatusCwd(cwd), [cwd])
 
   return (
-    <div className="flex h-6 shrink-0 items-center gap-3 border-t border-(--ui-stroke-secondary) bg-(--ui-bg-chrome) px-2 text-[12px] text-muted-foreground">
+    <div className="flex h-6 shrink-0 items-center gap-3 bg-(--ui-bg-chrome) px-2 text-[12px] text-muted-foreground">
       <div className="relative">
         <button
           className="flex items-center gap-1 hover:text-foreground"

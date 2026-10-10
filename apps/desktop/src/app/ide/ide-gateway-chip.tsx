@@ -1,16 +1,18 @@
 import { useStore } from '@nanostores/react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router'
 
+import { useGatewayRequest } from '@/app/gateway/hooks/use-gateway-request'
 import { SETTINGS_ROUTE } from '@/app/routes'
 import { GatewayMenuPanel } from '@/app/shell/gateway-menu-panel'
-import { getStatus } from '@/hermes'
+import { useStatusSnapshot } from '@/app/shell/hooks/use-status-snapshot'
 import { useI18n } from '@/i18n'
 import { statusBarGatewayHealth } from '@/lib/gateway-health-pill'
 import { Activity, AlertCircle } from '@/lib/icons'
 import { cn } from '@/lib/utils'
+import { $activeConnectionId } from '@/store/connections'
+import { $activeGatewayProfile } from '@/store/profile'
 import { $gatewayState } from '@/store/session'
-import type { StatusResponse } from '@/types/hermes'
 
 /** Compact gateway control for the IDE status bar (shell statusbar is not mounted in IDE mode). */
 export function IdeGatewayChip() {
@@ -18,34 +20,15 @@ export function IdeGatewayChip() {
   const copy = t.shell.statusbar
   const navigate = useNavigate()
   const gatewayState = useStore($gatewayState)
+  const activeConnectionId = useStore($activeConnectionId)
+  const activeGatewayProfile = useStore($activeGatewayProfile)
+  const gatewayScope = `${activeConnectionId ?? ''}\0${activeGatewayProfile}`
+  const { requestGateway } = useGatewayRequest()
   const [open, setOpen] = useState(false)
-  const [statusSnapshot, setStatusSnapshot] = useState<StatusResponse | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-
-    const load = async () => {
-      try {
-        const status = await getStatus()
-
-        if (!cancelled) {
-          setStatusSnapshot(status)
-        }
-      } catch {
-        if (!cancelled) {
-          setStatusSnapshot(null)
-        }
-      }
-    }
-
-    void load()
-    const timer = window.setInterval(() => void load(), 60_000)
-
-    return () => {
-      cancelled = true
-      window.clearInterval(timer)
-    }
-  }, [gatewayState])
+  // The same snapshot + inference-readiness poll the shell statusbar runs.
+  // Handing the health pill a permanent `inferenceStatus: null` is what used
+  // to pin this chip on "checking" forever: null reads as "not yet checked".
+  const { inferenceStatus, statusSnapshot } = useStatusSnapshot(gatewayState, requestGateway, gatewayScope)
 
   const health = statusBarGatewayHealth({
     connectionState: gatewayState,
@@ -61,7 +44,7 @@ export function IdeGatewayChip() {
       restarting: copy.gatewayRestarting,
       unavailable: copy.gatewayUnavailable
     },
-    inferenceStatus: null,
+    inferenceStatus,
     messagingRunning: statusSnapshot?.gateway_running,
     messagingState: statusSnapshot?.gateway_state,
     platforms: statusSnapshot?.gateway_platforms
@@ -77,7 +60,7 @@ export function IdeGatewayChip() {
           health.degraded || gatewayState !== 'open' ? 'text-amber-500' : undefined
         )}
         onClick={() => setOpen(value => !value)}
-        title={health.title || health.detail}
+        title={health.title || inferenceStatus?.reason || health.detail}
         type="button"
       >
         {ready ? <Activity className="size-3.5" /> : <AlertCircle className="size-3.5" />}
@@ -88,7 +71,7 @@ export function IdeGatewayChip() {
         <div className="absolute bottom-6 left-0 z-40 w-72 overflow-hidden rounded-md border border-(--ui-stroke-secondary) bg-popover shadow-lg">
           <GatewayMenuPanel
             gatewayState={gatewayState}
-            inferenceStatus={null}
+            inferenceStatus={inferenceStatus}
             onClose={() => setOpen(false)}
             onOpenSystem={() => {
               setOpen(false)

@@ -31,7 +31,7 @@ export function IdeActivityBar({
   const navigate = useNavigate()
 
   return (
-    <div className="flex h-full w-12 shrink-0 flex-col items-center gap-0.5 border-r border-(--ui-stroke-secondary) bg-(--ui-bg-chrome) py-1">
+    <div className="flex h-full w-12 shrink-0 flex-col items-center gap-0.5 bg-(--ui-bg-chrome) py-1">
       {PANELS.map(item => {
         const active = sideOpen && panel === item.id
 

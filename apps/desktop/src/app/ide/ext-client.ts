@@ -1,10 +1,25 @@
 import type {
+  ExtBridge,
+  ExtensionContributes,
   ExtensionInstallResult,
   ExtensionListResult,
   ExtensionSearchResult,
-  ExtensionUninstallResult,
-  ExtBridge
+  ExtensionUninstallResult
 } from '../../../electron/ide/contract'
+
+/** One row of the extensions panel — a search hit or an installed extension
+ *  flattened to what the list and the detail view render. */
+export interface ExtensionRow {
+  contributes?: ExtensionContributes
+  description: string
+  downloadCount?: number
+  iconUrl?: string
+  id: string
+  installed: boolean
+  publisher: string
+  title: string
+  version: string
+}
 
 function bridge(): ExtBridge | undefined {
   return window.hermesDesktop?.ext

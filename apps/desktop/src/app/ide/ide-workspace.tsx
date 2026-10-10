@@ -23,6 +23,7 @@ import { $dirtyPreviewUrls } from '@/store/preview-edit'
 import { $focusedWorkspaceCwd } from '@/store/session-states'
 import { $workspaceChangeTick } from '@/store/workspace-events'
 
+import type { ExtensionRow } from './ext-client'
 import { IdeActivityBar, type IdePanel } from './ide-activity'
 import { IdeChatHeader } from './ide-chats'
 import { $ideCommand } from './ide-commands'
@@ -37,6 +38,7 @@ import { $ideSaveRequest, noteIdeEditor } from './ide-editor'
 import { lspStart } from './lsp-client'
 import { setActiveIdeEditorGroup, syncIdeEditorGroup } from './ide-editor-groups'
 import { IdeExplorer } from './ide-explorer'
+import { IdeExtensionDetail } from './ide-extension-detail'
 import { IdeGit } from './ide-git'
 import { GITHUB_LOGIN_COMMAND, IdeGithub } from './ide-github'
 import { $ideOpenPath, $ideReveal, $ideSideTick, noteIdeFile, noteIdeTimeline, requestIdeGoto, setIdeTitle, takeIdeHistoryMove } from './ide-nav'
@@ -44,9 +46,9 @@ import { appendIdeOutput } from './ide-output'
 import { IdePanel as IdeBottomPanel, type IdeBottomTab } from './ide-panel'
 import { IdeDebugSidebar, IdeDebugToolbar } from './ide-debug'
 import { ensureDebugEvents } from './ide-debug-session'
-import { IdeExtensions } from './ide-extensions'
+import { IdeExtensions, toggleExtension } from './ide-extensions'
 import { IdeSearch } from './ide-search'
-import { $debugPhase, openIdeSearchReplace } from './ide-state'
+import { $debugPhase, $ideExtensionAction, noteIdeExtensionChange, openIdeSearchReplace, problemStoreForPath } from './ide-state'
 import {
   $ideRecentFolders,
   noteIdeRecentFolder,
@@ -120,12 +122,15 @@ export function IdeWorkspace() {
   const [chatOpen, setChatOpen] = useState(() => saved.current.chatOpen)
   const [rightTab, setRightTab] = useState<'changes' | 'chat'>(() => saved.current.rightTab)
   const reviewOpen = useStore($reviewOpen)
-  const reviewWasOpen = useRef(false)
+  // Starts from the current value: a persisted-open review on boot is not a
+  // fresh "opened now" and must not flip the chat column to the diff.
+  const reviewWasOpen = useRef(reviewOpen)
   const [terminalOpen, setTerminalOpen] = useState(() => saved.current.terminalOpen)
   const [bottomTab, setBottomTab] = useState<IdeBottomTab>(() => (saved.current.bottomTab as IdeBottomTab) || 'terminal')
   const [sideWidth, setSideWidth] = useState(() => readSize('side', 256, 160, 520))
   const [chatWidth, setChatWidth] = useState(() => readSize('chat', 360, 280, 640))
   const [terminalHeight, setTerminalHeight] = useState(() => readSize('terminal', 192, 96, 520))
+  const [detail, setDetail] = useState<null | ExtensionRow>(null)
   const [diff, setDiff] = useState<null | string>(null)
   const [tabs, setTabs] = useState<OpenTab[]>([])
   const [activeId, setActiveId] = useState<null | string>(null)
@@ -224,8 +229,12 @@ export function IdeWorkspace() {
         })
       )
       setChatOpen(true)
-      setRightTab('changes')
-      revealReview(cwd)
+      // The review is a destination, not a hijacker: files changing in the
+      // background never steal the chat column. If the user is already
+      // reviewing, keep that diff live against this workspace instead.
+      if ($reviewOpen.get()) {
+        revealReview(cwd)
+      }
     })
   }, [cwd])
 
@@ -278,10 +287,43 @@ export function IdeWorkspace() {
         return
       }
 
+      setDetail(null)
       setDiff(null)
       setActiveId(reveal.id)
     })
   }, [])
+
+  // Row buttons and the detail view ask here. The workspace is always
+  // mounted, so the detail's install/uninstall keeps working even with the
+  // extensions panel closed.
+  useEffect(() => {
+    return $ideExtensionAction.listen(row => {
+      if (!row) {
+        return
+      }
+
+      void (async () => {
+        const outcome = await toggleExtension(row)
+
+        if (outcome.status === 'rejected') {
+          const fields = outcome.fields?.length ? ` (${outcome.fields.join(', ')})` : ''
+
+          notifyError(new Error(`${t.ide.extensionsRejected}${fields}`), t.ide.extensions)
+
+          return
+        }
+
+        if (outcome.status === 'offline') {
+          notifyError(new Error(t.ide.extensionsUnavailable), t.ide.extensions)
+
+          return
+        }
+
+        setDetail(current => (current?.id === row.id ? { ...row, installed: outcome.status === 'installed' } : current))
+        noteIdeExtensionChange()
+      })()
+    })
+  }, [t])
 
   useEffect(() => {
     if (reviewOpen) {
@@ -317,6 +359,7 @@ export function IdeWorkspace() {
 
       const id = preview.path || preview.url
 
+      setDetail(null)
       setDiff(null)
 
       if (options?.secondary) {
@@ -544,7 +587,10 @@ export function IdeWorkspace() {
   }, [activeId])
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col bg-(--ui-bg-chrome)">
+    <div className="relative flex h-full min-h-0 min-w-0 flex-col bg-(--ui-bg-chrome)">
+      {/* The statue fill owns the whole page — every region wears it, and the
+          panes read apart by surface shade underneath it. */}
+      <Backdrop force />
       <div className="flex min-h-0 flex-1">
         <IdeActivityBar
           onPanel={next => {
@@ -559,15 +605,14 @@ export function IdeWorkspace() {
           panel={panel}
           sideOpen={sideOpen}
         />
-        {/* Everything right of the activity bar shares one fullscreen backdrop;
+        {/* Everything right of the activity bar shares one surface family;
             titlebar stays outside IdeShell padding, activity bar stays chrome. */}
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
-          <Backdrop force />
           <div className="relative z-1 flex min-h-0 min-w-0 flex-1">
         {sideOpen && (
           <>
             <div
-              className="flex h-full shrink-0 flex-col border-r border-(--ui-stroke-secondary) bg-(--ui-sidebar-surface-background)/90"
+              className="relative z-1 flex h-full shrink-0 flex-col bg-(--ui-sidebar-surface-background)/90"
               style={{ width: sideWidth }}
             >
               <div className="flex h-9 shrink-0 items-center px-3 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
@@ -597,7 +642,7 @@ export function IdeWorkspace() {
                   />
                 )}
                 {panel === 'run' && <IdeDebugSidebar />}
-                {panel === 'extensions' && <IdeExtensions />}
+                {panel === 'extensions' && <IdeExtensions detailId={detail?.id ?? null} onDetail={setDetail} />}
                 {panel === 'git' && <IdeGit cwd={cwd} onDiff={setDiff} />}
                 {panel === 'github' && (
                 <IdeGithub
@@ -651,14 +696,15 @@ export function IdeWorkspace() {
             />
           </>
         )}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {(debugPhase !== 'idle' || panel === 'run') && <IdeDebugToolbar className="border-b border-(--ui-stroke-secondary)" />}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-(--ui-surface-background)">
+          {(debugPhase !== 'idle' || panel === 'run') && <IdeDebugToolbar className="bg-(--ui-bg-chrome)/90" />}
           <div className={cn('flex min-h-0 flex-1', split && 'gap-0')} ref={splitHostRef}>
             <div className="flex min-h-0 min-w-0" style={split ? { width: `${splitRatio * 100}%` } : { flex: 1 }}>
               <IdeEditor
                 active={active}
                 conflicted={conflicted}
                 cwd={cwd}
+                detail={detail}
                 diff={diff}
                 onClone={() => void cloneRepo()}
                 onClose={closeTab}
@@ -671,6 +717,7 @@ export function IdeWorkspace() {
                 }}
                 onOpenRecent={path => void openFolderAsProject(path)}
                 onSelect={id => {
+                  setDetail(null)
                   setDiff(null)
                   setActiveId(id)
                 }}
@@ -703,6 +750,7 @@ export function IdeWorkspace() {
                   <IdeEditor
                     active={secondary}
                     cwd={cwd}
+                    detail={null}
                     diff={null}
                     onClone={() => void cloneRepo()}
                     onClose={id => {
@@ -744,7 +792,7 @@ export function IdeWorkspace() {
                 }
               />
               <div
-                className="flex shrink-0 border border-(--ui-stroke-secondary) bg-(--ui-terminal-surface-background)"
+                className="flex shrink-0 bg-(--ui-terminal-surface-background)"
                 style={{ height: terminalHeight }}
               >
                 <IdeBottomPanel
@@ -773,7 +821,7 @@ export function IdeWorkspace() {
               }
             />
             <div
-              className="flex h-full shrink-0 flex-col border-l border-(--ui-stroke-secondary) bg-background/90"
+              className="relative z-1 flex h-full shrink-0 flex-col bg-(--ui-chat-surface-background)/90"
               style={{ width: chatWidth }}
             >
               <IdeChatHeader
@@ -816,6 +864,22 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
 
+/** A file name that turns red with the file's error count beside it — the same
+ *  problem marking the file tree rows wear. */
+function TabFileLabel({ label, path }: { label: string; path: null | string }) {
+  const problems = useStore(problemStoreForPath(path ?? ''))
+
+  return (
+    <>
+      <span className={cn('truncate', problems.errors > 0 && 'text-[#f14c4c]')}>{label}</span>
+      {problems.errors > 0 && <span className="shrink-0 text-[10px] font-medium text-[#f14c4c]">{problems.errors}</span>}
+      {problems.warnings > 0 && (
+        <span className="shrink-0 text-[10px] font-medium text-[#cca700]">{problems.warnings}</span>
+      )}
+    </>
+  )
+}
+
 function PaneSash({ axis, onResize }: { axis: 'x' | 'y'; onResize: (delta: number) => void }) {
   const drag = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault()
@@ -840,11 +904,29 @@ function PaneSash({ axis, onResize }: { axis: 'x' | 'y'; onResize: (delta: numbe
   return (
     <div
       className={cn(
-        'shrink-0 bg-transparent hover:bg-(--ui-stroke-secondary)',
-        axis === 'x' ? 'w-1 cursor-col-resize bg-(--ui-stroke-secondary)' : 'h-1 cursor-row-resize bg-(--ui-stroke-secondary)'
+        'group relative shrink-0 [-webkit-app-region:no-drag]',
+        axis === 'x' ? 'w-1 cursor-col-resize' : 'h-1 cursor-row-resize'
       )}
       onPointerDown={drag}
-    />
+      role="separator"
+    >
+      {/* Regions read apart by surface shade; the seam itself only shows when
+          the pointer comes near — a hairline that lifts to full strength plus
+          the thicker accent grab band, same treatment as the agent surface's
+          split sash (pane-shell/tree-split). */}
+      <span
+        className={cn(
+          'absolute bg-(--ui-stroke-secondary) opacity-0 transition-opacity duration-100 group-hover:opacity-100',
+          axis === 'x' ? 'inset-y-0 left-1/2 w-px -translate-x-1/2' : 'inset-x-0 top-1/2 h-px -translate-y-1/2'
+        )}
+      />
+      <span
+        className={cn(
+          'absolute bg-(--ui-sash-hover-border) opacity-0 transition-opacity duration-100 group-hover:opacity-100',
+          axis === 'x' ? 'inset-y-0 left-1/2 w-1 -translate-x-1/2' : 'inset-x-0 top-1/2 h-1 -translate-y-1/2'
+        )}
+      />
+    </div>
   )
 }
 
@@ -852,6 +934,7 @@ function IdeEditor({
   active,
   conflicted,
   cwd,
+  detail,
   diff,
   recentFolders,
   tabs,
@@ -865,6 +948,7 @@ function IdeEditor({
   active: null | OpenTab
   conflicted?: boolean
   cwd: null | string
+  detail: null | ExtensionRow
   diff: null | string
   recentFolders: { at: number; path: string }[]
   tabs: OpenTab[]
@@ -887,9 +971,9 @@ function IdeEditor({
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-transparent">
       {tabs.length > 0 && (
-        <div className="flex h-9 shrink-0 items-stretch overflow-x-auto border-b border-(--ui-stroke-secondary) bg-(--ui-bg-chrome)/90">
+        <div className="flex h-9 shrink-0 items-stretch overflow-x-auto bg-(--ui-bg-chrome)/90">
           {tabs.map(tab => {
-            const selected = tab.id === active?.id && !diff
+            const selected = tab.id === active?.id && !diff && !detail
 
             return (
               <div
@@ -907,7 +991,7 @@ function IdeEditor({
                   {(tab.dirty || Boolean(dirtyUrls[tab.target.url])) && (
                     <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-[#e2c08d]" />
                   )}
-                  <span className="truncate">{tab.target.label}</span>
+                  <TabFileLabel label={tab.target.label} path={tab.target.path ?? null} />
                 </button>
                 <button
                   aria-label={t.ide.closeTab}
@@ -934,7 +1018,9 @@ function IdeEditor({
         </div>
       )}
       <div className="relative min-h-0 flex-1">
-        {diff ? (
+        {detail ? (
+          <IdeExtensionDetail row={detail} />
+        ) : diff ? (
           <pre className="h-full overflow-auto p-3 text-xs whitespace-pre-wrap">{diff}</pre>
         ) : conflicted && active?.target.path && cwd ? (
           <IdeConflict
@@ -952,8 +1038,16 @@ function IdeEditor({
           <PreviewPane embedded onClose={() => onClose(active.id)} target={active.target} />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
+            {/* Page furniture: the lettering is anchored to the window, not to
+                this area, so dragging a sash or toggling a pane never slides
+                or rescales it. Painted under the panes, so it lives wherever
+                the file preview area shows through. */}
+            <Wordmark
+              className="pointer-events-none fixed left-1/2 top-[24%] -translate-x-1/2"
+              text="HERMES AGENT"
+              width="min(36rem, 52vw)"
+            />
             <div className="w-full max-w-2xl min-w-0 px-2">
-              <Wordmark className="mb-2" text="HERMES AGENT" width="min(100%, 36rem)" />
               {folder ? (
                 <p className="m-0 text-sm text-foreground">{folder}</p>
               ) : (

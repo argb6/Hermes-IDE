@@ -94,8 +94,20 @@ function hitFrom(raw: Record<string, unknown>): ExtensionSearchHit | null {
     version: typeof raw.version === 'string' ? raw.version : '',
     ...(typeof raw.displayName === 'string' ? { displayName: raw.displayName } : {}),
     ...(typeof raw.description === 'string' ? { description: raw.description } : {}),
-    ...(typeof raw.downloadCount === 'number' ? { downloadCount: raw.downloadCount } : {})
+    ...(typeof raw.downloadCount === 'number' ? { downloadCount: raw.downloadCount } : {}),
+    ...iconUrlField(raw.files)
   }
+}
+
+/** Open VSX lists the asset URLs under `files`; `icon` is the display icon. */
+function iconUrlField(files: unknown): { iconUrl?: string } {
+  const icon = isRecord(files) && typeof files.icon === 'string' ? files.icon : ''
+
+  return icon ? { iconUrl: icon } : {}
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object'
 }
 
 function clamp(value: number | undefined, fallback: number, min: number, max: number): number {

@@ -448,6 +448,11 @@ export function revealReview(scopeCwd: null | string = null, scopeTarget = 'main
     // originating composer target alongside the cwd for the agent-ship action.
     $reviewScopeCwd.set(scopeCwd?.trim() || null)
     $reviewScopeTarget.set(target)
+  } else {
+    // "Take me to the diff" must show the CURRENT tree even when the pane is
+    // already open — an entry point that skips the refresh strands the pane on
+    // whatever (often empty) list the last read left behind.
+    void refreshReview()
   }
 
   if ($workspaceMode.get() === 'ide') {

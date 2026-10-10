@@ -5,6 +5,7 @@ import { documentFileUri, documentUriForModel } from './document-uri'
 import { lspLanguageId } from './ide-language'
 import { replaceDiagnostics } from './ide-state'
 import { lspRequest, onLspDiagnostics } from './lsp-client'
+import { type DiagnosticKind, diagnosticKind, problemSeverity } from './lsp-severity'
 
 interface LspDiagnostic {
   code?: number | string
@@ -171,6 +172,15 @@ function numberField(value: unknown) {
   return typeof value === 'number' ? value : 0
 }
 
+// Monaco's MarkerSeverity scale is not the LSP scale — each kind names its
+// marker severity explicitly (lsp-severity.ts).
+const MARKER_SEVERITY: Record<DiagnosticKind, monaco.MarkerSeverity> = {
+  error: monaco.MarkerSeverity.Error,
+  hint: monaco.MarkerSeverity.Hint,
+  info: monaco.MarkerSeverity.Info,
+  warning: monaco.MarkerSeverity.Warning
+}
+
 function markers(diagnostics: LspDiagnostic[]): monaco.editor.IMarkerData[] {
   return diagnostics.flatMap(item => {
     const range = toRange(item.range as unknown as Record<string, unknown>)
@@ -184,7 +194,7 @@ function markers(diagnostics: LspDiagnostic[]): monaco.editor.IMarkerData[] {
         ...range,
         code: item.code === undefined ? undefined : String(item.code),
         message: item.message,
-        severity: item.severity ?? monaco.MarkerSeverity.Error,
+        severity: MARKER_SEVERITY[diagnosticKind(item.severity)],
         source: item.source
       }
     ]
@@ -224,7 +234,7 @@ export function registerLspProviders() {
             line: range.startLineNumber,
             message: item.message,
             path: uri.fsPath || event.uri,
-            severity: item.severity ?? 1,
+            severity: problemSeverity(item.severity),
             source: item.source,
             uri: event.uri
           }
