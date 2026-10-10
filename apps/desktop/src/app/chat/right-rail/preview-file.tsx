@@ -384,6 +384,20 @@ function MarkdownCode({ className, children, ...props }: ComponentProps<'code'>)
   return <RichCodeBlock code={code} fallback={highlighted} language={language} />
 }
 
+/** Whole-file `.mermaid`/`.mmd` preview: one diagram through the same lazy
+ *  renderer the transcript's ```mermaid fences use (theme-aware, cached,
+ *  click-to-zoom, copy-as-PNG), with the source view as the loading and
+ *  parse-failure fallback. */
+export function MermaidFilePreview({ filePath, text }: { filePath?: string; text: string }) {
+  return (
+    <RichCodeBlock
+      code={text}
+      fallback={<SourceView filePath={filePath} language="mermaid" text={text} />}
+      language="mermaid"
+    />
+  )
+}
+
 function MarkdownTable({ className, ...rest }: ComponentProps<'table'>) {
   return (
     <div className="mb-4 w-full overflow-x-auto rounded-lg border border-border last:mb-0">
@@ -1160,20 +1174,21 @@ export function LocalFilePreview({
   }, [encoding])
 
   const markdownFile = (state.language || target.language) === 'markdown'
+  const diagramFile = (state.language || target.language) === 'mermaid'
 
   useEffect(() => {
     if (!canEdit || editing || state.text === undefined || state.binary) {
       return
     }
 
-    // Markdown opens on the rendered page. Source is a separate choice, so the
-    // picture and the file text are never on screen together.
-    if (markdownFile && userMode !== 'source') {
+    // Markdown and Mermaid open on the rendered page. Source is a separate
+    // choice, so the picture and the file text are never on screen together.
+    if ((markdownFile || diagramFile) && userMode !== 'source') {
       return
     }
 
     beginEditRef.current()
-  }, [canEdit, editing, markdownFile, state.binary, state.text, userMode])
+  }, [canEdit, diagramFile, editing, markdownFile, state.binary, state.text, userMode])
 
   const discardAndReload = () => {
     setEditing(false)
@@ -1427,24 +1442,26 @@ export function LocalFilePreview({
 
   if (isText && state.text !== undefined) {
     const isMarkdown = markdownFile
+    const isDiagram = diagramFile
     const hasDiff = Boolean(state.diff && state.diff.trim())
     const modes: PreviewViewMode[] = []
 
-    if (isMarkdown || onSelectRendered) {
+    if (isMarkdown || isDiagram || onSelectRendered) {
       modes.push('rendered')
     }
 
     modes.push('source')
 
-    if (isMarkdown) {
+    if (isMarkdown || isDiagram) {
       modes.push('both')
     }
 
-    if (!isMarkdown && hasDiff) {
+    if (!isMarkdown && !isDiagram && hasDiff) {
       modes.push('diff')
     }
 
-    const autoMode: PreviewViewMode = hasDiff && !isMarkdown ? 'diff' : isMarkdown ? 'rendered' : 'source'
+    const autoMode: PreviewViewMode =
+      hasDiff && !isMarkdown && !isDiagram ? 'diff' : isMarkdown || isDiagram ? 'rendered' : 'source'
     // The pane hands an HTML file over only once Source was picked; that pick
     // outranks the diff-first default.
     const mode = userMode && modes.includes(userMode) ? userMode : onSelectRendered ? 'source' : autoMode
@@ -1476,7 +1493,11 @@ export function LocalFilePreview({
         <PreviewModeSwitcher active={mode} modes={modes} onSelect={selectMode} trailing={null} />
         <div className="min-h-0 flex-1 overflow-auto">
           {mode === 'rendered' ? (
-            <MarkdownPreview filePath={filePath} text={editSessionRef.current ? draftRef.current : state.text} />
+            isDiagram ? (
+              <MermaidFilePreview filePath={filePath} text={editSessionRef.current ? draftRef.current : state.text} />
+            ) : (
+              <MarkdownPreview filePath={filePath} text={editSessionRef.current ? draftRef.current : state.text} />
+            )
           ) : mode === 'both' ? (
             <div className="grid h-full min-h-0 grid-cols-2">
               <div className="min-h-0 overflow-auto border-r border-border">
@@ -1487,7 +1508,11 @@ export function LocalFilePreview({
                 />
               </div>
               <div className="min-h-0 overflow-auto">
-                <MarkdownPreview filePath={filePath} text={editSessionRef.current ? draftRef.current : state.text} />
+                {isDiagram ? (
+                  <MermaidFilePreview filePath={filePath} text={editSessionRef.current ? draftRef.current : state.text} />
+                ) : (
+                  <MarkdownPreview filePath={filePath} text={editSessionRef.current ? draftRef.current : state.text} />
+                )}
               </div>
             </div>
           ) : mode === 'diff' ? (

@@ -32,6 +32,7 @@ const LANGUAGE_LABEL: Record<string, string> = {
   kotlin: 'Kotlin',
   lua: 'Lua',
   markdown: 'Markdown',
+  mermaid: 'Mermaid',
   python: 'Python',
   ruby: 'Ruby',
   rust: 'Rust',

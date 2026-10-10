@@ -129,6 +129,7 @@ const LANGUAGE_BY_EXTENSION: Record<string, string> = {
   markdown: 'markdown',
   md: 'markdown',
   mdx: 'markdown',
+  mermaid: 'mermaid',
   mmd: 'mermaid',
   ps1: 'powershell',
   psql: 'sql',
@@ -239,6 +240,14 @@ const SHIKI_LANGUAGE_BY_EXTENSION: Record<string, string> = {
 
 export function shikiLanguageForFilename(path: string | undefined): string {
   return SHIKI_LANGUAGE_BY_EXTENSION[filenameExtToken(path)] || ''
+}
+
+/** True for whole-file Mermaid diagram sources (`.mermaid` / `.mmd`): the file
+ *  preview opens them rendered as a diagram, with Source as the other choice. */
+export function isMermaidFilename(path: string | undefined): boolean {
+  const token = filenameExtToken(path)
+
+  return token === 'mermaid' || token === 'mmd'
 }
 
 function proseLineCount(body: string): number {

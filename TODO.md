@@ -127,6 +127,15 @@
 
 ---
 
+## 十一、Mermaid 在 IDE 的适配 ✅（2026-10-10）
+
+- **缺口**：`.md` 里 ```mermaid 围栏早已渲染成图（chat 与文件预览共用懒渲染器），但**整文件 `.mermaid`/`.mmd` 只当纯文本**——ide-mermaid-language.ts 注释宣称"整文件已覆盖"与实际不符。
+- **适配**：`local-preview.ts` 映射 `.mermaid`/`.mmd` → `mermaid`；`preview-file.tsx` 新增 `MermaidFilePreview`（复用 RichCodeBlock 懒渲染器：主题跟随/内容缓存/点击全屏/复制 PNG，源码为加载与失败降级），预览模式对图表文件提供 渲染/源码/并排 三种，默认渲染；打开即出图，可切源码并排编辑。
+- **常见问题清单核对**：暗色主题 ✅、流式半图 ✅、大图缩放 ✅、XSS(strict) ✅、渲染缓存 ✅、Monaco 着色 ✅；唯一小瑕疵=坏图静默降级源码、无"渲染失败"提示（需 i18n 文案，未做）。
+- 测试：`preview-mermaid-file.test.tsx` 3/3 过；相邻套件与 HEAD 对拍零回归。
+
+---
+
 ## 附：环境备忘（不影响仓库代码）
 
 - 本机 `node_modules` 曾有 8 个包解压损坏（`radix-ui`、`shiki`、`streamdown`、`@streamdown/code`、`@streamdown/math`、`remend`、`cross-env`、`@audiowave/react`、`@nous-research/ui`）——这是之前大批 vitest 测试文件“无法运行”的根因，**已修复**。

@@ -13,6 +13,7 @@ import {
 } from './ide-editor-actions'
 import { documentFileUri, documentUriForModel, rememberDocumentUri } from './document-uri'
 import { lspLanguageId, monacoLanguageId } from './ide-language'
+import { registerMermaidLanguage } from './ide-mermaid-language'
 import './ide-monaco.css'
 import {
   $debugLocation,
@@ -45,6 +46,8 @@ monaco.typescript.javascriptDefaults.setDiagnosticsOptions({
   noSemanticValidation: true,
   noSyntaxValidation: true
 })
+
+registerMermaidLanguage(monaco)
 
 monaco.languages.registerDocumentFormattingEditProvider('json', {
   provideDocumentFormattingEdits(model) {
