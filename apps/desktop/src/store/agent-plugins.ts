@@ -246,6 +246,8 @@ export async function toggleAgentPlugin(
 
 export interface AgentPluginInstallResult {
   ok: boolean
+  /** The install request asked to enable the plugin and the backend did. */
+  enabled?: boolean
   /** The client stopped waiting; the backend may still finish the install. */
   timedOut?: boolean
   pluginName?: string
@@ -296,6 +298,7 @@ export async function installAgentPlugin(
   try {
     const result = await request<{
       ok?: boolean
+      enabled?: boolean
       plugin_name?: string
       warnings?: string[]
       missing_env?: string[]
@@ -329,6 +332,7 @@ export async function installAgentPlugin(
 
     return {
       ok: true,
+      enabled: result.enabled,
       pluginName: result.plugin_name,
       warnings: result.warnings,
       missingEnv: result.missing_env,
