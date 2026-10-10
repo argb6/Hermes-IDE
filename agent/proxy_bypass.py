@@ -15,6 +15,7 @@ from __future__ import annotations
 import ipaddress
 import os
 import re
+import sys
 from urllib.parse import urlsplit
 
 PROXY_ENV_KEYS = ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "https_proxy", "http_proxy", "all_proxy")
@@ -23,6 +24,74 @@ PROXY_ENV_KEYS = ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "https_proxy", "http
 def first_proxy_env_value() -> str:
     """First non-empty HTTPS_PROXY / HTTP_PROXY / ALL_PROXY value (any case), or ''."""
     return next((v for k in PROXY_ENV_KEYS if (v := (os.environ.get(k) or "").strip())), "")
+
+
+def parse_windows_proxy_settings(
+    proxy_enable: object, proxy_server: str | None, proxy_override: str | None,
+) -> tuple[str, str] | None:
+    """``(proxy_url, no_proxy_csv)`` from raw WinINET values, or None when no usable proxy.
+
+    This is the Windows system proxy every GUI proxy tool (FlClash, Clash Verge,
+    v2rayN, ...) configures — the Python HTTP stack never reads it (httpx only
+    honours ``*_proxy`` env vars), so without this fallback the model transport
+    ignores a system-proxy-mode tool entirely and users had to enable the tool's
+    TUN/VPN mode to get model calls through.
+
+    ``ProxyServer`` is either one ``host:port`` for every protocol or a
+    semicolon list of ``protocol=host:port`` pairs; the ``https=`` entry wins
+    (falling back to ``http=``), and a socks-only proxy is not usable by the
+    httpx transport so it counts as absent. ``ProxyOverride`` (the system
+    NO_PROXY) is a semicolon list; ``<local>`` approximates to the loopback
+    hosts. Disabled (``ProxyEnable`` falsy) or empty → None.
+    """
+    if not proxy_enable or not str(proxy_server or "").strip():
+        return None
+    server = str(proxy_server).strip()
+    if "=" in server:
+        pairs = dict(part.split("=", 1) for part in server.split(";") if "=" in part)
+        endpoint = pairs.get("https") or pairs.get("http")
+        if not endpoint:
+            return None
+    else:
+        endpoint = server
+    host, port = split_host_port(endpoint)
+    if not host:
+        return None
+    proxy_url = f"http://{host}:{port}" if port else f"http://{host}"
+    entries = [
+        "localhost,127.0.0.1,::1" if part.strip().lower() == "<local>" else part.strip()
+        for part in re.split(r"[;\s]+", str(proxy_override or "")) if part.strip()
+    ]
+    return proxy_url, ",".join(entry for entry in entries if entry)
+
+
+def windows_system_proxy() -> tuple[str, str] | None:
+    """The current user's WinINET system proxy as ``(proxy_url, no_proxy_csv)``, or None.
+
+    Registry read is Windows-only (``winreg``); every other platform returns None.
+    """
+    if sys.platform != "win32":
+        return None
+    try:
+        import winreg
+
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Internet Settings"
+        )
+        try:
+            def read(name):
+                try:
+                    return winreg.QueryValueEx(key, name)[0]
+                except OSError:
+                    return None
+
+            return parse_windows_proxy_settings(
+                read("ProxyEnable"), read("ProxyServer"), read("ProxyOverride")
+            )
+        finally:
+            winreg.CloseKey(key)
+    except OSError:
+        return None
 
 
 def split_host_port(value: str) -> tuple[str, int | None]:

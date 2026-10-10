@@ -33,7 +33,7 @@
 
 ---
 
-## 二、聊天界面莫名“瞬移”到上面的对话（未修复）
+## 二、聊天界面莫名“瞬移”到上面的对话（挂起，等复现——用户 2026-10-10 拍板“到时候复现再说”）
 
 - **现象**：聊天过程中，视口会莫名其妙跳到上面的对话/消息（滚动位置突然回跳），没有明显操作规律，偶发。
 - **截图证据（2026-10-10 视觉复核 `image_24615b.png`）**：视口顶部一张 4 行用户消息卡片与视口底部一张**逐字相同**的卡片同时出现（中间隔着思考行 + reasoning 块），且 reason 段首句“被吃掉”从半句开始（`passed through the atom…`）——很像转录在分页/回填切点把同一消息渲染两次、视口随之“跳”到重复位置。这一条与一-1 的截图残迹同源。
@@ -113,7 +113,7 @@
 
 ---
 
-## 十、小米模型"必须挂 VPN"问题 —— 已诊断（2026-10-10）
+## 十、小米模型"必须挂 VPN"问题 ✅ 已修复（2026-10-10）
 
 - **诊断结论**：不是被墙。`api.xiaomimimo.com` CNAME 到小米自有 ALB（`mimo-pri-prod.alb.xiaomi.com` → 124.251.34.38），国内权威 DNS 与 AliDNS 解析一致、无污染；实测直连 `/v1/models` 0.49s 返回 401（服务正常应答）。"关 VPN 就不能用"是你本地网络到该 IP 的**路由问题**，不是 GFW/域名问题。
 - **代码事实**：Hermes 的模型 HTTP 客户端已经支持代理——`agent/process_bootstrap.py:170-183` 按 `HTTPS_PROXY / HTTP_PROXY / ALL_PROXY`（大小写不敏感）选代理，并按 `NO_PROXY`（CIDR、`*.` 通配、host:port）豁免；`.env` 里的变量会被后端加载进进程环境，因此直接生效。
@@ -121,7 +121,9 @@
   `HTTPS_PROXY=http://127.0.0.1:<你的本地代理端口>`（Clash/Mihomo 默认 7890，V2Ray 常 10809）
   `NO_PROXY=localhost,127.0.0.1,.cn`（国内站点直连，只有模型走代理）
   重启桌面应用即可：只要代理工具的本地端口在监听，无需全局 VPN。
-- **待确认**：若你的"VPN"是纯全局 TUN（没有本地端口），则无本地端口可指，代码侧无解；确认工具类型后可决定是否做 `model.proxy_url` 配置项 + 设置页（与 `gateway.proxy_url` 同风格）。
+- **真凶（用户告知工具为 FlClash 后定位）**：FlClash 的"系统代理"模式写的是 Windows 系统代理（WinINET 注册表），而 Python 的 httpx **只读 `*_proxy` 环境变量、从不读系统代理**——所以系统代理模式对模型请求完全无效，必须开 TUN/VPN（"挂VPN"）全局接管才通。
+- **修复（已实现）**：`agent/proxy_bypass.py` 新增 `parse_windows_proxy_settings`（纯函数解析 ProxyEnable/ProxyServer/ProxyOverride，支持整体与按协议两种形式、`<local>` 译为回环、socks-only 视为无）与 `windows_system_proxy()`（WinINET 注册表只读）；`agent/process_bootstrap._get_proxy_for_base_url` 在无代理环境变量时回退到系统代理，并把系统例外表并入 NO_PROXY 匹配。**显式环境变量永远优先**（可钉住或关闭代理）。
+- **效果**：FlClash 开"系统代理"模式（不开 TUN）即可让小米模型走代理；`.env` 配方仍可用（优先级更高）。测试 `tests/agent/test_system_proxy.py` 14/14 过。
 
 ---
 

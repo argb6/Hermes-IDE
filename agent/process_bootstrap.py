@@ -16,7 +16,7 @@ from typing import Any, Optional
 
 from hermes_bootstrap import _happy_eyeballs_create_connection
 from utils import base_url_hostname, normalize_proxy_url
-from agent.proxy_bypass import first_proxy_env_value, should_bypass_proxy
+from agent.proxy_bypass import first_proxy_env_value, no_proxy_entries, should_bypass_proxy, windows_system_proxy
 
 
 _OPENAI_CLS_CACHE = None
@@ -175,12 +175,23 @@ def _get_proxy_from_env() -> Optional[str]:
 
 def _get_proxy_for_base_url(base_url: Optional[str]) -> Optional[str]:
     """Env-configured proxy unless NO_PROXY excludes this base URL (same matcher as the
-    gateway adapters: CIDR, ``*.`` wildcards and host:port entries all count)."""
+    gateway adapters: CIDR, ``*.`` wildcards and host:port entries all count).
+
+    With no ``*_proxy`` env set, falls back to the Windows system proxy (what
+    FlClash / Clash Verge / v2rayN configure in system-proxy mode) and merges
+    the system override list into the NO_PROXY check. Explicit env always wins,
+    so an operator can still pin or disable a proxy for the process."""
     proxy = _get_proxy_from_env()
+    bypass_value = None
+    if proxy is None:
+        system = windows_system_proxy()
+        if system:
+            proxy, system_bypass = system
+            bypass_value = ",".join(part for part in (",".join(no_proxy_entries()), system_bypass) if part) or None
     if not (proxy and base_url):
         return proxy
     raw = base_url.strip()
-    return None if should_bypass_proxy(raw if "://" in raw else f"//{raw}") else proxy
+    return None if should_bypass_proxy(raw if "://" in raw else f"//{raw}", no_proxy_value=bypass_value) else proxy
 
 
 def _shared_transport_cls():
