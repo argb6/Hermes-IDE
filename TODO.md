@@ -52,8 +52,9 @@
 - **现状摸底**（已初步调研，未改动）：
   - 对话列表已有一套深度性能工程：`app/chat/transcript-window.ts`（按渲染权重的窗口截断、粘性切线、会话级 memo）、`thread/list.tsx` 的 RENDER_BUDGET / 首帧预算 / `content-visibility` 离屏跳过、多窗格共享预算——说明剩余热点在窗口机制之外。
   - 可疑方向：行级组件的全局 store 订阅放大（如 `assistant-message.tsx` 里每条消息订阅 `$currentModel`/`$connection`/`$activeGatewayProfile`，全局状态一变全量行重渲染）、markdown/代码高亮重复解析、滚动锚定开销（可能与“瞬移”同根因）。
-- **怎么入手**：仓库自带性能基准工具 `apps/desktop/scripts/perf/`（`npm run perf -- --spawn`，合成消息驱动、不需要 LLM；场景含 `transcript`（长对话挂载）、`stream-history`、`live-window`、`session-switch`；`baseline.json` 做回归门禁，`--cpuprofile` 做热点归因）。先跑基准拿数据 → 定位热点 → 改 → 复测对比。
-- **状态**：未开始（基准第一次运行被打断）。
+- **热点归因（2026-10-10，已完成）**：`--prod --cpuprofile` 在 stream-history 场景实测 top 自耗时——**shiki 语法高亮 214ms（最大项）**、`appendChild` 157ms（DOM 提交抖动）、markdown 解析（vendor-md 三个入口）合计 ~205ms、@assistant-ui 运行时消息查找 ~61ms、React 提交/协调 ~145ms、`setAttribute` 96ms（流式期间属性抖动）+ shiki oniguruma wasm 37ms。结论：卡顿主因是**流式/挂载期间的 markdown 解析 + 代码高亮 + DOM 重建**，窗口化机制之外的行内渲染开销，与“行级 store 订阅放大”假设一致。本机 --prod 基线：stream-history longtasks_n=10、longtask_max=160ms、transcript mount 534ms（dev）/ longtask 1712ms（dev）。
+- **下一步（修复循环，待续）**：① 代码块高亮按 (lang, 内容哈希) 记忆化、流式期间先渲染纯文本落定后再高亮；② 稳定行 identity 降低 appendChild/setAttribute 提交量；③ 本机 `--prod` 前后 A/B 对比（每次 ~6 分钟）。每改一处复测一处，杜绝盲改。
+- **状态**：热点已定位（数据如上），修复循环待续。
 
 ---
 
