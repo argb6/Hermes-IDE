@@ -396,6 +396,7 @@ export interface Translations {
     formatJson: string
     free: string
     loading: string
+    mermaidRenderFailed: string
     notSet: string
     refresh: string
     remove: string

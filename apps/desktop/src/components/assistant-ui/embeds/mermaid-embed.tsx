@@ -4,6 +4,7 @@ import type { Mermaid as MermaidApi } from 'mermaid'
 import { useEffect, useState } from 'react'
 
 import { Zoomable } from '@/components/ui/zoomable'
+import { useI18n } from '@/i18n'
 import { copySvgAsPng, normalizeSvgSize } from '@/lib/svg-image'
 import { cn } from '@/lib/utils'
 
@@ -71,6 +72,7 @@ function svgAccessibleText(svg: string): string {
 // the source while the message streams (partial syntax throws) and falls back
 // to source on parse failure.
 export default function MermaidRenderer({ code, streaming }: RichFenceProps) {
+  const { t } = useI18n()
   const isDark = useIsDark()
   const [svg, setSvg] = useState('')
   const [failed, setFailed] = useState(false)
@@ -112,7 +114,15 @@ export default function MermaidRenderer({ code, streaming }: RichFenceProps) {
   }
 
   if (failed) {
-    return <SourcePreview code={code} />
+    return (
+      <div>
+        <div className="flex items-center gap-1.5 px-3 pt-2 text-[0.7rem] text-amber-600 dark:text-amber-400">
+          <span aria-hidden>{'⚠'}</span>
+          {t.common.mermaidRenderFailed}
+        </div>
+        <SourcePreview code={code} />
+      </div>
+    )
   }
 
   if (!svg) {

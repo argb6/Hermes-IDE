@@ -107,6 +107,7 @@ export const zh = defineLocale({
     formatJson: '格式化 JSON',
     free: '免费',
     loading: '加载中…',
+    mermaidRenderFailed: '图表渲染失败，显示源码',
     notSet: '未设置',
     refresh: '刷新',
     remove: '移除',

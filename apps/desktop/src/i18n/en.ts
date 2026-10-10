@@ -358,6 +358,7 @@ export const en: Translations = {
     formatJson: 'Format JSON',
     free: 'Free',
     loading: 'Loading…',
+    mermaidRenderFailed: 'Diagram failed to render — showing the source',
     notSet: 'Not set',
     refresh: 'Refresh',
     remove: 'Remove',

@@ -1481,14 +1481,17 @@ function enforceDockedPanes(
       continue
     }
 
-    enforcedDocksThisBoot.add(pane.id)
-
     const from = findGroupOfPane(next, pane.id)
     const anchor = findGroupOfPane(next, dock.pane)
 
     if (!from || !anchor) {
+      // Not applied — never burn the pass on a missing anchor: the pane must
+      // be re-homed by a LATER adoption pass (the retired one-time heal burned
+      // its token exactly this way, stranding Cronjobs in the Bots tab strip).
       continue
     }
+
+    enforcedDocksThisBoot.add(pane.id)
 
     if (dock.pos === 'center' && from.id === anchor.id) {
       // Already stacked with its anchor, and nothing to repair: the trees that
