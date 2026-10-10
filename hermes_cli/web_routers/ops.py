@@ -44,7 +44,7 @@ _gateway_subcommand = late("_gateway_subcommand", "hermes_cli.web_server_gateway
 _config_profile_scope = late("_config_profile_scope", "hermes_cli.web_server_profiles")
 _resolve_profile_dir = late("_resolve_profile_dir", "hermes_cli.web_server_profiles")
 _spawn_hermes_action = late("_spawn_hermes_action", "hermes_cli.web_server_gateway")
-write_platform_config_field = late("write_platform_config_field", "hermes_cli.config")
+_write_platform_enabled = late("_write_platform_enabled", "hermes_cli.web_server_messaging")
 get_hermes_home = late("get_hermes_home", "hermes_cli.config")
 load_config = late("load_config", "hermes_cli.config")
 save_config = late("save_config", "hermes_cli.config")
@@ -173,7 +173,7 @@ async def list_webhooks(profile: Optional[str] = None):
 async def enable_webhooks(profile: Optional[str] = None):
     def _run():
         with config_write_scope(profile):
-            write_platform_config_field("webhook", "enabled", True)
+            _write_platform_enabled("webhook", True)
 
     with http_failure("Failed to enable webhook platform from dashboard", 500, detail="Failed to enable webhook platform."):
         await asyncio.to_thread(_run)

@@ -123,6 +123,29 @@ def _profile_list(args):
         dist = f"{p.distribution_name}@{p.distribution_version or '?'}"[:30] if p.distribution_name else "—"
         print(f"{marker}{name:<15} {model:<28} {gw:<12} {alias:<12} {dist}")
     print()
+    for line in _shared_credential_warnings(profiles):
+        print(line)
+
+
+def _shared_credential_warnings(profiles) -> list:
+    """One warning per named profile whose bot credential is byte-identical to the default's
+    (typically an old ``--clone`` that copied .env): the collision that parks a multiplexed
+    adapter or makes two standalone gateways fight over one bot."""
+    from hermes_cli.profile_channels import shared_channel_credentials, shared_credential_warning
+    default = next((p for p in profiles if p.is_default), None)
+    if default is None:
+        return []
+    lines = []
+    for p in profiles:
+        if p.is_default:
+            continue
+        try:
+            shared = shared_channel_credentials(p.path, default.path)
+        except Exception:
+            continue
+        if shared:
+            lines.append(shared_credential_warning(p.name, shared))
+    return lines + ([""] if lines else [])
 
 
 def _profile_use(args):
@@ -141,6 +164,25 @@ def _source_profile_dir(source_label: str) -> Path:
     if not source_dir.is_dir():
         raise FileNotFoundError(source_dir)
     return source_dir
+
+
+def _print_channel_clone_notice(name: str, source_label: str, clone_channels: bool, clone_flag: str) -> None:
+    from hermes_cli.profile_channels import (
+        channel_platforms_configured, format_stripped_notice, shared_channel_credentials,
+        shared_credential_warning,
+    )
+    from hermes_cli.profiles import get_profile_dir
+    try:
+        source_dir = _source_profile_dir(source_label)
+    except FileNotFoundError:
+        return
+    if not clone_channels:
+        for line in format_stripped_notice(name, channel_platforms_configured(source_dir), clone_flag):
+            print(line)
+        return
+    shared = shared_channel_credentials(get_profile_dir(name), source_dir)
+    if shared:
+        print(shared_credential_warning(name, shared, source_label))
 
 
 def _profile_create(args):
@@ -184,6 +226,7 @@ def _profile_create(args):
         if sync_imports:
             print(f"Import sources carried over — `hermes -p {name} import-agent --sync` "
                   "keeps pulling the same Claude Code / Codex trees.")
+        _print_channel_clone_notice(name, source_label, clone_channels, "--clone-all" if clone_all else "--clone")
         # Auto-clone Honcho config for the new profile (only with clone operations)
         try:
             from plugins.memory import import_provider_module

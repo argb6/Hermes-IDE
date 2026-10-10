@@ -517,8 +517,10 @@ _SEND_CONSENT_EXPLAINER = (
     "(it contains no personal information and is reset by deleting",
     "the shared-metrics directory). Only packages whose entire",
     "collection period falls inside a recorded consent window are",
-    "ever sent — data from before you opt in, or from any gap",
-    "while sending was off, stays on this machine. Sending can be", "turned off again at any time.",
+    "ever sent. Apart from the fresh-install note (noted on this",
+    "machine and counted only once you opt in), data from before",
+    "you opt in, or from any gap while sending was off, stays on",
+    "this machine. Sending can be turned off again at any time.",
 )
 
 
@@ -529,7 +531,9 @@ def setup_telemetry(config: dict):
           "outcomes, error classes (with a fixed-list reason when a memory write or",
           "context compression is refused, fails or is skipped), model routes and",
           "token totals, built-in tool, command and catalog names, bucketed setup",
-          "counts, update results and timing, crashes,",
+          "counts, update and install results and timing (with a fixed-list reason",
+          "and the stage when one fails; a fresh install is noted on this machine and",
+          "counted only once you opt in), crashes,",
           "startup and reply speed, messaging-platform health, how Hermes gets used",
           "(agent accuracy and efficiency, active time per surface, which features and",
           "settings are used or switched off, provider setup outcomes), and coarse",
@@ -577,6 +581,7 @@ def _record_send_consent_change(*, enabled: bool) -> None:
 
 from hermes_cli.setup_tts import setup_tts  # noqa: E402
 from hermes_cli.setup_terminal import setup_terminal_backend  # noqa: E402
+from hermes_cli.setup_platforms import setup_gateway  # noqa: E402
 from hermes_cli.setup_summary import _print_setup_summary  # noqa: E402,F401
 from hermes_cli.setup_migration import _offer_openclaw_migration, _skip_configured_section  # noqa: E402
 from hermes_cli.setup_quick import _run_portal_one_shot, _run_quick_setup  # noqa: E402
@@ -588,6 +593,7 @@ SETUP_SECTIONS = [
     ("model", "Model & Provider", setup_model_provider),
     ("tts", "Text-to-Speech", setup_tts),
     ("terminal", "Terminal Backend", setup_terminal_backend),
+    ("gateway", "Messaging Platforms (Gateway)", setup_gateway),
     ("tools", "Tools", setup_tools),
     ("telemetry", "Shared Metrics", setup_telemetry),
     ("agent", "Agent Settings", setup_agent_settings),
@@ -638,8 +644,11 @@ def _run_full_setup(config: dict, hermes_home, *, is_existing: bool, migration_r
         return migration_ran and _skip_configured_section(config, key, label)
 
     def _gateway_step() -> None:
-        # Messaging platform setup was removed in this fork; keep only the service
-        # install so cron jobs and imported configs stay active.
+        if not _skip("gateway", "Messaging Platforms"):
+            setup_gateway(config)
+            return
+        # A skipped (migrated) gateway section still needs its service so imported platforms
+        # and cron jobs become active.
         from hermes_cli.gateway import ensure_gateway_service
         ensure_gateway_service(context="setup")
 
@@ -649,7 +658,7 @@ def _run_full_setup(config: dict, hermes_home, *, is_existing: bool, migration_r
     _run_setup_steps([
         _step("model", "Model & Provider", lambda: setup_model_provider(config)),
         _step("terminal", "Terminal Backend", lambda: setup_terminal_backend(config)),
-        ("Gateway Service", _gateway_step),
+        ("Messaging Platforms", _gateway_step),
         _step("tools", "Tools", lambda: setup_tools(config, first_install=not is_existing))])
 
 
@@ -718,7 +727,7 @@ def _run_setup_wizard_impl(args):
         _info("Running the full wizard — each prompt shows your current value.",
               "Press Enter to keep it, or type a new value to change it.", "",
               "Tip: jump straight to a section with 'hermes setup model|terminal|",
-              "     tools|agent', or fill only missing items with --quick.")
+              "     gateway|tools|agent', or fill only missing items with --quick.")
     else:
         # First-time setup (--reconfigure / --quick are meaningless here; fall through)
         print()

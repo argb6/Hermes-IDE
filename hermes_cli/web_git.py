@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
 from hermes_cli._subprocess_compat import harden_git_argv, noninteractive_git_env
@@ -185,20 +186,7 @@ def _classify(tag: str, xy: str, path: str) -> dict:
     y = xy[1] if len(xy) > 1 else "."
     return {"path": path, "staged": _entry_staged(tag, xy),
             "unstaged": tag == "?" or (tag in ("1", "2") and y not in (".", "?")),
-            "untracked": tag == "?", "conflicted": tag == "u",
-            "mark": _decoration_mark(tag, xy)}
-
-
-def _decoration_mark(tag: str, xy: str) -> str:
-    """Explorer badge. Worktree code wins, so an unstaged edit stays M."""
-    if tag == "?":
-        return "U"
-    if tag == "u":
-        return "C"
-    y = xy[1] if len(xy) > 1 else "."
-    x = xy[0] if xy else "."
-    letter = (y if y != "." else x).upper()
-    return letter if letter in {"A", "C", "D", "M", "R"} else "M"
+            "untracked": tag == "?", "conflicted": tag == "u"}
 
 
 def _status_letter(tag: str, xy: str) -> str:
@@ -246,78 +234,6 @@ def repo_status(cwd: str) -> dict | None:
         **{flag: sum(f[flag] for f in files) for flag in ("staged", "unstaged", "untracked", "conflicted")},
         "changed": len(files), "added": added, "removed": sum(r for _, r in counts), "files": files[:200],
     }
-
-
-def repo_log(cwd: str) -> dict:
-    """Recent commit subjects for the IDE history list. Empty when git cannot answer."""
-    if not _is_dir(cwd):
-        return {"commits": []}
-    raw = _git_out(cwd, ["log", "-n", "40", "--pretty=format:%h%x1f%s"])
-    commits = []
-    for line in raw.splitlines():
-        hash_, _, subject = line.partition("\x1f")
-        if hash_ and subject:
-            commits.append({"hash": hash_, "subject": subject})
-    return {"commits": commits}
-
-
-_FILE_REV = re.compile(r"^[0-9a-fA-F]{4,40}$")
-
-
-def _repo_rel(cwd: str, file_path: str) -> str:
-    """Path git should see: repo-relative, forward slashes."""
-    try:
-        rel = Path(file_path).resolve().relative_to(Path(cwd).resolve())
-    except (OSError, ValueError):
-        return file_path.replace("\\", "/")
-    return rel.as_posix()
-
-
-def file_history(cwd: str, file_path: str) -> dict:
-    """Commits that touched one file, newest first. Empty outside a repo."""
-    if not _is_dir(cwd):
-        return {"commits": []}
-    raw = _git_out(
-        cwd,
-        ["log", "-n", "30", "--pretty=format:%h%x1f%s%x1f%ct", "--", _repo_rel(cwd, file_path)],
-    )
-    commits = []
-    for line in raw.splitlines():
-        parts = line.split("\x1f")
-        if len(parts) < 3 or not parts[0]:
-            continue
-        try:
-            at = int(parts[2])
-        except ValueError:
-            at = 0
-        commits.append({"hash": parts[0], "subject": parts[1], "at": at})
-    return {"commits": commits}
-
-
-def file_commit_diff(cwd: str, file_path: str, rev: str) -> str:
-    """Unified diff of one file in one commit. Empty for a bad revision."""
-    if not _is_dir(cwd) or not _FILE_REV.match(rev or ""):
-        return ""
-    return _git_out(cwd, ["diff", f"{rev}^", rev, "--", _repo_rel(cwd, file_path)])
-
-
-def file_conflict_sides(cwd: str, file_path: str) -> dict:
-    """Merge conflict sides: stage :2: (ours), working tree, stage :3: (theirs)."""
-    empty = {"ours": "", "result": "", "theirs": ""}
-    if not _is_dir(cwd):
-        return empty
-    rel = _repo_rel(cwd, file_path)
-
-    def show(stage: int) -> str:
-        return _git_out(cwd, ["show", f":{stage}:{rel}"])
-
-    result = ""
-    try:
-        candidate = Path(file_path) if Path(file_path).is_absolute() else Path(cwd) / rel
-        result = candidate.read_text(encoding="utf-8")
-    except OSError:
-        result = ""
-    return {"ours": show(2), "result": result, "theirs": show(3)}
 
 
 # ── review pane ──────────────────────────────────────────────────────────────
@@ -370,7 +286,22 @@ def review_list(cwd: str, scope: str, base_ref: str | None) -> dict:
 
 def _all_add_diff(cwd: str, file_path: str) -> str:
     """Synthesized all-add diff for an untracked file (``--no-index`` exits non-zero by design)."""
+    if not (Path(cwd) / file_path).is_file():
+        return ""
     return _git(cwd, ["diff", "--no-index", "--", os.devnull, file_path])[1]
+
+
+def _single_file_diff(cwd: str, args: list[str], file_path: str) -> str:
+    """Literal Git pathspecs still expand directories, including deleted ones."""
+    literal = f":(literal){file_path}"
+    names = _git_out(cwd, ["diff", *args, "--no-renames", "--name-only", "-z", "--", literal])
+    if not names:
+        return ""
+    root = Path(_git_line(cwd, ["rev-parse", "--show-toplevel"]))
+    target = (Path(cwd) / file_path).resolve()
+    if any((root / name).resolve() != target for name in names.split("\0") if name):
+        raise RuntimeError("Expected a single file, not a directory")
+    return _git_out(cwd, ["diff", *args, "--no-renames", "--", literal])
 
 
 def review_diff(cwd: str, file_path: str, scope: str, base_ref: str | None, staged: bool) -> str:
@@ -378,12 +309,12 @@ def review_diff(cwd: str, file_path: str, scope: str, base_ref: str | None, stag
         return ""
     if scope == "branch":
         base = _branch_base(cwd)
-        return _git_out(cwd, ["diff", f"{base}...HEAD", "--", file_path]) if base else ""
+        return _single_file_diff(cwd, [f"{base}...HEAD"], file_path) if base else ""
     if scope == "lastTurn":
-        return _git_out(cwd, ["diff", base_ref, "--", file_path]) if base_ref else ""
+        return _single_file_diff(cwd, [base_ref], file_path) if base_ref else ""
     if staged:
-        return _git_out(cwd, ["diff", "--cached", "--", file_path])
-    worktree = _git_out(cwd, ["diff", "--", file_path])
+        return _single_file_diff(cwd, ["--cached"], file_path)
+    worktree = _single_file_diff(cwd, [], file_path)
     return worktree if worktree.strip() else _all_add_diff(cwd, file_path)
 
 
@@ -392,10 +323,11 @@ def file_diff_vs_head(cwd: str, file_path: str) -> str:
     review_diff, never all-adds a clean tracked file; only a genuinely untracked one."""
     if not _is_dir(cwd):
         return ""
-    head = _git_out(cwd, ["diff", "HEAD", "--", file_path])
+    literal = f":(literal){file_path}"
+    head = _single_file_diff(cwd, ["HEAD"], file_path)
     if head.strip():
         return head
-    status = _git_out(cwd, ["status", "--porcelain", "--", file_path])
+    status = _git_out(cwd, ["status", "--porcelain", "--", literal])
     return _all_add_diff(cwd, file_path) if status.strip().startswith("??") else ""
 
 
@@ -425,11 +357,46 @@ def _has_staged(raw: str) -> bool:
     return any(_entry_staged(tag, xy) for tag, xy, _ in _walk_entries(raw))
 
 
+def _review_commit_env(cwd: str) -> dict[str, str]:
+    """Carry Git's effective identity into an otherwise isolated commit.
+
+    Only read-only ``git var`` queries see the original config files. Git resolves
+    local/conditional config and author/committer environment precedence in *cwd*;
+    status, staging and the commit itself retain all noninteractive isolation.
+    """
+    base = dict(os.environ)
+    env = noninteractive_git_env(base)
+    probe_env = dict(env)
+    for key in ("GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_CONFIG_NOSYSTEM"):
+        if key in base:
+            probe_env[key] = base[key]
+        else:
+            probe_env.pop(key, None)
+    for role in ("AUTHOR", "COMMITTER"):
+        proc = _run(["git", "var", f"GIT_{role}_IDENT"], cwd, 5, probe_env)
+        if proc is None:
+            raise RuntimeError("git identity lookup failed")
+        if proc.returncode != 0:
+            raise RuntimeError(proc.stderr.strip() or "git identity lookup failed")
+        ident = re.fullmatch(r"(.*) <([^<>]*)> -?\d+ [+-]\d{4}", proc.stdout.strip())
+        if ident is None:
+            raise RuntimeError("git returned an invalid commit identity")
+        env[f"GIT_{role}_NAME"], env[f"GIT_{role}_EMAIL"] = ident.groups()
+    return env
+
+
 def review_commit(cwd: str, message: str, push: bool) -> dict:
     """Commit the working tree; stage everything first when nothing is staged."""
+    env = _review_commit_env(cwd)
     if not _has_staged(_status_z(cwd)[1]):
         _git_ok(cwd, ["add", "-A"])
-    _git_ok(cwd, ["commit", "-m", message])
+    proc = _run(
+        ["git", *harden_git_argv(["commit", "-m", message])], cwd, _GIT_TIMEOUT, env
+    )
+    if proc is None or proc.returncode != 0:
+        raise RuntimeError(
+            (proc.stderr.strip() if proc is not None else "") or "git commit failed"
+        )
     if push:
         _review_push(cwd)
     return {"ok": True}
@@ -449,13 +416,25 @@ def review_push(cwd: str) -> dict:
     return {"ok": True}
 
 
-def review_commit_context(cwd: str) -> dict:
+def review_commit_context(cwd: str, path_allowed: Callable[[Path], bool] | None = None) -> dict:
     """Diff of what WILL commit + recent subjects, for drafting a commit message."""
     code, raw = _status_z(cwd) if _is_dir(cwd) else (1, "")
     if code != 0:
         return {"diff": "", "recent": ""}
     entries = list(_walk_entries(raw))
-    diff = _git_out(cwd, ["diff", "--cached"] if _has_staged(raw) else ["diff", "HEAD"])
+    args = ["diff", "--cached"] if _has_staged(raw) else ["diff", "HEAD"]
+    if path_allowed is None:
+        diff = _git_out(cwd, args)
+    else:
+        # Disable rename pairing so an allowed destination cannot include the
+        # old contents of a credential path excluded from the diff.
+        repo = _git_line(cwd, ["rev-parse", "--show-toplevel"])
+        if not repo:
+            return {"diff": "", "recent": ""}
+        names = _git_out(repo, [*args, "--no-renames", "--name-only", "-z"]).split("\0")
+        allowed = [f":(literal){name}" for name in names if name and path_allowed(Path(repo) / name)]
+        diff = _git_out(repo, [*args, "--no-renames", "--", *allowed]) if allowed else ""
+        entries = [entry for entry in entries if path_allowed(Path(repo) / entry[2])]
     if len(diff) > _COMMIT_CONTEXT_DIFF_MAX_CHARS:
         omitted = len(diff) - _COMMIT_CONTEXT_DIFF_MAX_CHARS
         diff = f"{diff[:_COMMIT_CONTEXT_DIFF_MAX_CHARS]}\n# diff truncated: {omitted} chars omitted\n"
@@ -591,78 +570,6 @@ def review_create_pr(cwd: str) -> dict:
         raise RuntimeError(f"gh pr create failed: {detail}")
     url = next((line for line in reversed(out.strip().splitlines()) if line.strip()), "")
     return {"url": url}
-
-
-def _gh_login(node) -> str:
-    return str(node.get("login") or "") if isinstance(node, dict) else ""
-
-
-def _gh_logins(nodes) -> list[str]:
-    if not isinstance(nodes, list):
-        return []
-    return [name for name in (_gh_login(node) for node in nodes) if name]
-
-
-def _sidebar_pr(pr: dict) -> dict:
-    return {
-        "number": int(pr.get("number") or 0),
-        "title": str(pr.get("title") or ""),
-        "url": str(pr.get("url") or ""),
-        "draft": bool(pr.get("isDraft")),
-        "author": _gh_login(pr.get("author")),
-        "branch": str(pr.get("headRefName") or ""),
-        "reviewers": _gh_logins(pr.get("reviewRequests")),
-    }
-
-
-def _sidebar_issue(issue: dict) -> dict:
-    return {
-        "number": int(issue.get("number") or 0),
-        "title": str(issue.get("title") or ""),
-        "url": str(issue.get("url") or ""),
-        "author": _gh_login(issue.get("author")),
-        "assignees": _gh_logins(issue.get("assignees")),
-    }
-
-
-def github_sidebar(cwd: str) -> dict:
-    """Open PRs and issues for the IDE GitHub side bar. Empty when gh cannot answer."""
-    if not _is_dir(cwd):
-        return {"prs": [], "issues": []}
-    prs = _gh_json(
-        cwd,
-        ["pr", "list", "--state", "open", "--limit", "30", "--json",
-         "number,title,url,isDraft,author,reviewRequests,headRefName"],
-    ) or []
-    issues = _gh_json(
-        cwd,
-        ["issue", "list", "--state", "open", "--limit", "30", "--json",
-         "number,title,url,author,assignees"],
-    ) or []
-    return {
-        "prs": [_sidebar_pr(pr) for pr in prs if isinstance(pr, dict)],
-        "issues": [_sidebar_issue(issue) for issue in issues if isinstance(issue, dict)],
-    }
-
-
-_PR_FILE_MARK = {"ADDED": "A", "COPIED": "R", "DELETED": "D", "RENAMED": "R"}
-
-
-def github_pr_files(cwd: str, number: int) -> dict:
-    """Files one open PR touches. ``mark`` is the explorer letter."""
-    if not _is_dir(cwd) or not isinstance(number, int) or number <= 0:
-        return {"files": []}
-    payload = _gh_json(cwd, ["pr", "view", str(number), "--json", "files"]) or {}
-    rows = payload.get("files") if isinstance(payload, dict) else []
-    if not isinstance(rows, list):
-        return {"files": []}
-    return {
-        "files": [
-            {"path": str(row.get("path") or ""), "mark": _PR_FILE_MARK.get(str(row.get("changeType") or ""), "M")}
-            for row in rows
-            if isinstance(row, dict) and row.get("path")
-        ]
-    }
 
 
 # ── worktrees & branches ─────────────────────────────────────────────────────
@@ -881,23 +788,6 @@ def branch_switch(cwd: str, branch: str) -> dict:
         raise RuntimeError("Branch name is required.")
     _git_ok(cwd, ["switch", target])
     return {"branch": target}
-
-
-def branch_checkout(cwd: str, mode: str, name: str = "", from_ref: str = "") -> dict:
-    if mode == "detach":
-        _git_ok(cwd, ["switch", "--detach"])
-        return {"branch": "HEAD"}
-    target = _sanitize_branch(name)
-    if not target:
-        raise RuntimeError("Branch name is required.")
-    if mode == "create":
-        base = _sanitize_branch(from_ref) if from_ref else ""
-        _git_ok(cwd, ["switch", "-c", target, base] if base else ["switch", "-c", target])
-        return {"branch": target}
-    if mode == "track":
-        _git_ok(cwd, ["switch", "--track", target])
-        return {"branch": target}
-    return branch_switch(cwd, target)
 
 
 def base_branch_list(cwd: str) -> list[dict]:

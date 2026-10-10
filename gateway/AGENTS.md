@@ -1,7 +1,7 @@
 # gateway/ — messaging gateway, adapters, delivery
 
 Applies on top of the root `AGENTS.md`. Long-form: `website/docs/developer-guide/gateway-internals.md`.
-Built-in platform adapters were removed in this fork (plan 12.2): `gateway/platforms/` keeps only the shared base/event/helpers plumbing that the runner, relay and api_server/webhook ingresses use. Platform adapters arrive as plugins only.
+New platform adapter: follow `gateway/platforms/ADDING_A_PLATFORM.md` step by step.
 
 ## Shape
 

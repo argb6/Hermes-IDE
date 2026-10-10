@@ -21,7 +21,8 @@ the `┊` activity feed. `load_cli_config()` in `cli.py` merges CLI defaults + u
 
 `hermes_cli/gateway.py` is the `hermes gateway` facade (process discovery, PM-aware systemd unit
 generation/refresh, command dispatch); topical siblings re-exported by the facade include
-`gateway_launchd.py` (macOS LaunchAgent backend),
+`gateway_launchd.py` (macOS LaunchAgent backend), `gateway_setup_wizard.py`
+(`hermes gateway setup`: `_PLATFORMS` registry, status table, per-platform prompts, service offer),
 `gateway_windows*.py`, `gateway_supervised_restart.py`, `gateway_migrate*.py`, `gateway_multiplex_*.py`,
 `gateway_enroll.py`, `gateway_command_errors.py`. Sibling bodies read facade names through `_gw()`
 (late binding on `hermes_cli.gateway`), so monkeypatch on the facade; mutable state such as
@@ -151,10 +152,12 @@ profile per activity via a contextvar override while `os.environ["HERMES_HOME"]`
 profile — a module constant or import-time read there freezes to the launch profile (rules in
 root). Profiles are independent
 islands by design — no live config inheritance; `--clone` copies at creation, minus messaging
-channels (the channel inventory/strip/refusal helpers in `profile_channels.py` were removed in
-this fork — no messaging platform can be configured, so a clone has no channel credentials to
-strip and `--clone-channels` has nothing to opt into). Clones are built in `profiles/.<name>.staging-<pid>` (hidden → invisible to
-`_iter_named_profile_dirs` and the hot-serve rescan) and published by one `os.rename`;
+channels (`profile_channels.py`: ownership-based inventory evaluated in the SOURCE's plugin scope —
+adapter-declared keys + canonical/alias prefixes + `GATEWAY_ALLOW*`/`GATEWAY_RELAY_*`; prefixes shared
+with tools (`TWILIO_`/`EMAIL_`, plus a plugin platform's `shared_env_prefixes`) are stripped only when the source runs that adapter; never a hand
+list; a platform that left core keeps its ownership from its `LEFT_CORE` row while the plugin is absent). `--clone-channels` opts in and its live-multiplexer refusal lives in `create_profile` (CLI, REST
+and TUI all go through it). Clones are built in `profiles/.<name>.staging-<pid>` (hidden → invisible to
+`_iter_named_profile_dirs` and the hot-serve rescan) and published by one `os.rename` after the strip;
 symlinked `.env`/`config.yaml` are materialized first so a clone never writes through to its source. Multiplex
 (`gateway.multiplex_profiles`) secret-scope rules: `gateway/AGENTS.md`. The served set is
 `profiles.py::profiles_to_serve(multiplex=True)` = default + every live dir under `profiles/` — live =

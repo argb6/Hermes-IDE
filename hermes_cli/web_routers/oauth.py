@@ -658,11 +658,7 @@ def _oauth_provider_disconnect_hint(provider: Dict[str, Any], status: Dict[str, 
 def _build_oauth_catalog() -> list[Dict[str, Any]]:
     """Accounts-tab provider list: ``_OAUTH_PROVIDER_CATALOG`` cards first (curated
     order, win on metadata), then every other accounts-tab ``provider_catalog()`` entry
-    in ``hermes model`` order, so plugin-added OAuth/external providers appear automatically.
-
-    This fork ships no subscription/OAuth sign-in cards (localized install):
-    only API-key providers and local models remain, so the catalog is always empty."""
-    return []
+    in ``hermes model`` order, so plugin-added OAuth/external providers appear automatically."""
     rows: list[Dict[str, Any]] = []
     seen: set[str] = set()
     for entry in _OAUTH_PROVIDER_CATALOG:
@@ -813,7 +809,7 @@ async def start_oauth_login(provider_id: str, request: Request, profile: Optiona
     _require_token(request)
     _gc_oauth_sessions()
     _validate_oauth_profile(profile)
-    catalog_entry = next((p for p in _build_oauth_catalog() if p["id"] == provider_id), None)
+    catalog_entry = next((p for p in _OAUTH_PROVIDER_CATALOG if p["id"] == provider_id), None)
     if catalog_entry is None:
         raise HTTPException(status_code=400, detail=f"Unknown provider {provider_id}")
     if catalog_entry["flow"] == "external":

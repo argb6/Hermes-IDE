@@ -19,6 +19,7 @@ import textwrap
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from hermes_cli import setup_platforms  # noqa: F401 — resolved lazily by siblings through the facade
 
 # UV's bundled Python ships a minimal PATH; ensure launchctl/systemctl are discoverable.
 if os.name == "posix":
@@ -976,9 +977,9 @@ def _prepare_profile_gateway_update_restart(profile: str, pid: int) -> str | Non
     return None
 
 
-def launch_detached_gateway_restart_by_cmdline(old_pid: int, run_argv: list[str]) -> bool:
-    """Relaunch a gateway with no profile→PID-file mapping by replaying its captured argv after exit."""
-    return old_pid > 0 and bool(run_argv) and _spawn_gateway_restart_watcher(old_pid, list(run_argv))
+def launch_detached_gateway_restart_by_cmdline(old_pid: int, run_argv: list[str], home: str | None = None) -> bool:
+    """Relaunch a gateway with no profile→PID-file mapping by replaying its captured argv (on Windows under ``home``, the one it ran on) after exit."""
+    return old_pid > 0 and bool(run_argv) and _spawn_gateway_restart_watcher(old_pid, list(run_argv), home=home)
 
 
 def launch_detached_profile_gateway_restart(profile: str, old_pid: int) -> bool:
@@ -1054,7 +1055,7 @@ def _host_gateway_watcher_env() -> dict[str, str]:
     return env
 
 
-def _spawn_gateway_restart_watcher(old_pid: int, run_argv: list[str], *, host: bool | None = None) -> bool:
+def _spawn_gateway_restart_watcher(old_pid: int, run_argv: list[str], *, host: bool | None = None, home: str | None = None) -> bool:
     """Spawn the detached watcher that respawns ``run_argv`` once ``old_pid`` exits. Watcher and respawn
     both need platform-appropriate detach: POSIX setsid; on Windows ``start_new_session`` does NOT detach
     (the watcher would die with the CLI console), so ``windows_detach_popen_kwargs()`` supplies flags."""
@@ -1073,7 +1074,7 @@ def _spawn_gateway_restart_watcher(old_pid: int, run_argv: list[str], *, host: b
     if sys.platform == "win32":
         try:
             from hermes_cli.gateway_windows import windowless_gateway_restart_spec
-            run_argv, respawn_cwd, respawn_env_overlay = windowless_gateway_restart_spec(list(run_argv))
+            run_argv, respawn_cwd, respawn_env_overlay = windowless_gateway_restart_spec(list(run_argv), home=home)
         except Exception:
             # Fall back to the original argv: a visible window beats a failed respawn.
             respawn_cwd = ""
@@ -4705,9 +4706,45 @@ def run_gateway(verbose: int = 0, quiet: bool = False, replace: bool = False, fo
     _hard_exit_after_gateway_teardown(0)
 
 
-# The interactive messaging-platform setup wizard was removed with the
-# messaging platforms themselves; `hermes gateway setup` is gone too.
+# =============================================================================
+# Gateway Setup (Interactive Messaging Platform Configuration)
+# =============================================================================
 
+from hermes_cli.gateway_setup_wizard import (  # noqa: E402,F401 — facade re-exports; tests patch here
+    _PLATFORMS,
+    _all_platforms,
+    _platform_status,
+    _set_platform_unauthorized_dm_behavior,
+    _print_setup_header,
+    _confirm_reconfigure,
+    _offer_home_channel,
+    _save_env_values,
+    _prompt_csv,
+    _UNAUTHORIZED_ACCESS_CHOICES,
+    _prompt_unauthorized_access,
+    _telegram_auto_setup,
+    _clean_discord_ids,
+    _prompt_allowlist_var,
+    _setup_standard_platform,
+    _WEIXIN_DM_POLICIES,
+    _WEIXIN_GROUP_NOTE,
+    _setup_weixin,
+    _setup_qqbot,
+    _signal_line_input,
+    _setup_signal,
+    _builtin_setup_fn,
+    _configure_platform,
+    _wizard_offer_service_action,
+    _setup_service_action,
+    _WIZARD_BANNER,
+    _WIZARD_BACKEND_LABELS,
+    _WIZARD_NO_SERVICE_LINES,
+    _wizard_service_status_block,
+    _wizard_platform_loop,
+    _wizard_install_service,
+    _wizard_post_setup,
+    gateway_setup,
+)
 
 
 # Operator wording for the out-of-loop watchdog exit reasons stamped by gateway/shutdown_watchdog.py.
@@ -5078,8 +5115,7 @@ def _cmd_run(args):
 
 
 def _cmd_setup(args):
-    print("`hermes gateway setup` was removed with the messaging platforms.", file=sys.stderr)
-    return 1
+    gateway_setup()
 
 
 _WSL_FOREGROUND_HINT = (

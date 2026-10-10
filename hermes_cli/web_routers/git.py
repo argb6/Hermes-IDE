@@ -7,20 +7,19 @@ wrappers (git/gh can block).
 """
 
 import asyncio
-import os
-import re
 import shutil
 import time
+from functools import partial
+from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from hermes_cli import web_git as _web_git
 from hermes_cli._subprocess_compat import bounded_probe_run
 from hermes_cli.web_deps import late
-from hermes_cli.web_server_files import _fs_path
+from hermes_cli.web_server_files import _fs_path, _hosted_fs_path_allowed, _hosted_fs_read_guard
 from hermes_cli.web_models import (
-    GitBranchCheckoutBody,
     GitBranchSwitchBody,
     GitCommitBody,
     GitFileBody,
@@ -53,26 +52,6 @@ async def git_status_route(path: str):
     return await _git_op(_web_git.repo_status, _git_path(path))
 
 
-@router.get("/api/git/log")
-async def git_log_route(path: str):
-    return await _git_op(_web_git.repo_log, _git_path(path))
-
-
-@router.get("/api/git/file-history")
-async def git_file_history_route(path: str, file: str):
-    return await _git_op(_web_git.file_history, _git_path(path), file)
-
-
-@router.get("/api/git/file-commit-diff")
-async def git_file_commit_diff_route(path: str, file: str, rev: str):
-    return {"diff": await _git_op(_web_git.file_commit_diff, _git_path(path), file, rev)}
-
-
-@router.get("/api/git/file-conflict-sides")
-async def git_file_conflict_sides_route(path: str, file: str):
-    return await _git_op(_web_git.file_conflict_sides, _git_path(path), file)
-
-
 # Cached `gh auth status` for the desktop composer's GitHub suggestion pill. GitHub
 # deliberately has NO MCP catalog entry (hosted MCP needs a per-host OAuth app; the
 # gh-CLI skills are the better integration), so the pill offers `/github-auth` —
@@ -83,66 +62,16 @@ _gh_auth_probe_task: Optional[asyncio.Task] = None
 _gh_auth_probe_started = 0.0  # monotonic start of _gh_auth_probe_task
 
 
-def _gh_binary() -> Optional[str]:
-    """Find ``gh`` even when this process started before GitHub CLI was installed.
-
-    ``shutil.which`` only sees the PATH frozen at launch. A winget/MSI install
-    updates the registry PATH and drops ``gh.exe`` under Program Files, which
-    the already-running serve process will not notice.
-    """
-    found = shutil.which("gh")
-    if found:
-        return found
-    if os.name != "nt":
-        return None
-    folders: list[str] = []
-    try:
-        import winreg
-
-        for hive, key_path in (
-            (winreg.HKEY_CURRENT_USER, "Environment"),
-            (winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"),
-        ):
-            with winreg.OpenKey(hive, key_path) as key:
-                value, _ = winreg.QueryValueEx(key, "Path")
-            folders.extend(part.strip().strip('"') for part in str(value).split(";") if part.strip())
-    except OSError:
-        pass
-    candidates = [os.path.join(os.path.expandvars(folder), "gh.exe") for folder in folders]
-    program_files = os.environ.get("ProgramFiles") or r"C:\Program Files"
-    local = os.environ.get("LOCALAPPDATA") or ""
-    candidates.extend(
-        [
-            os.path.join(program_files, "GitHub CLI", "gh.exe"),
-            os.path.join(local, "GitHub CLI", "gh.exe") if local else "",
-            os.path.join(local, "Programs", "GitHub CLI", "gh.exe") if local else "",
-        ]
-    )
-    for candidate in candidates:
-        if candidate and os.path.isfile(candidate):
-            return candidate
-    return None
-
-
 def _probe_gh_auth() -> dict:
-    gh = _gh_binary()
+    gh = shutil.which("gh")
     if not gh:
-        return {"available": False, "authenticated": False, "account": ""}
+        return {"available": False, "authenticated": False}
     try:
         # Exits 0 when at least one host is logged in; DEVNULL stdin guards against any prompt.
         proc = bounded_probe_run([gh, "auth", "status"], timeout=10)
-        text = f"{getattr(proc, 'stdout', '')}\n{getattr(proc, 'stderr', '')}" if proc else ""
-        account = ""
-        matched = re.search(r"account\s+(\S+)", text)
-        if matched:
-            account = matched.group(1).strip("()")
-        return {
-            "available": True,
-            "authenticated": bool(proc and proc.returncode == 0),
-            "account": account,
-        }
+        return {"available": True, "authenticated": bool(proc and proc.returncode == 0)}
     except Exception:
-        return {"available": True, "authenticated": False, "account": ""}
+        return {"available": True, "authenticated": False}
 
 
 def _clear_gh_auth_probe_task(completed_task: asyncio.Task) -> None:
@@ -200,19 +129,29 @@ async def git_review_list_route(path: str, scope: str = "uncommitted", base: Opt
 
 @router.get("/api/git/review/diff")
 async def git_review_diff_route(
-    path: str, file: str, scope: str = "uncommitted", base: Optional[str] = None, staged: bool = False
+    path: str, file: str, request: Request,
+    scope: str = "uncommitted", base: Optional[str] = None, staged: bool = False
 ):
-    return {"diff": await _git_op(_web_git.review_diff, _git_path(path), file, scope, base, staged)}
+    cwd = _git_path(path)
+    target = _fs_path(file, cwd=cwd)
+    _hosted_fs_read_guard(target, request)
+    return {"diff": await _git_op(_web_git.review_diff, cwd, str(target), scope, base, staged)}
 
 
 @router.get("/api/git/file-diff")
-async def git_file_diff_route(path: str, file: str):
-    return {"diff": await _git_op(_web_git.file_diff_vs_head, _git_path(path), file)}
+async def git_file_diff_route(path: str, file: str, request: Request):
+    cwd = _git_path(path)
+    target = _fs_path(file, cwd=cwd)
+    _hosted_fs_read_guard(target, request)
+    return {"diff": await _git_op(_web_git.file_diff_vs_head, cwd, str(target))}
 
 
 @router.get("/api/git/review/commit-context")
-async def git_commit_context_route(path: str):
-    return await _git_op(_web_git.review_commit_context, _git_path(path))
+async def git_commit_context_route(path: str, request: Request):
+    cwd = _git_path(path)
+    root = _hosted_fs_read_guard(Path(cwd), request)
+    allowed = partial(_hosted_fs_path_allowed, root) if root is not None else None
+    return await _git_op(_web_git.review_commit_context, cwd, allowed)
 
 
 @router.get("/api/git/review/rev-parse")
@@ -223,16 +162,6 @@ async def git_rev_parse_route(path: str, ref: Optional[str] = None):
 @router.get("/api/git/review/ship-info")
 async def git_ship_info_route(path: str):
     return await _git_op(_web_git.review_ship_info, _git_path(path))
-
-
-@router.get("/api/git/github/sidebar")
-async def git_github_sidebar_route(path: str):
-    return await _git_op(_web_git.github_sidebar, _git_path(path))
-
-
-@router.get("/api/git/github/pr-files")
-async def git_github_pr_files_route(path: str, number: int):
-    return await _git_op(_web_git.github_pr_files, _git_path(path), number)
 
 
 @router.post("/api/git/review/pr-list")
@@ -290,10 +219,3 @@ async def git_worktree_remove_route(body: GitWorktreeRemoveBody):
 @router.post("/api/git/branch/switch")
 async def git_branch_switch_route(body: GitBranchSwitchBody):
     return await _git_op(_web_git.branch_switch, _git_path(body.path), body.branch)
-
-
-@router.post("/api/git/branch/checkout")
-async def git_branch_checkout_route(body: GitBranchCheckoutBody):
-    return await _git_op(
-        _web_git.branch_checkout, _git_path(body.path), body.mode, body.name, body.from_ref
-    )

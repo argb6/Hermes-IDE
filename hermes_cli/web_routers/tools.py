@@ -233,9 +233,7 @@ async def get_toolsets(profile: Optional[str] = None):
         _CONFIG_ONLY_TOOLSETS, _get_effective_configurable_toolsets, _get_platform_tools,
         _toolset_configuration_platform, _toolset_has_keys, get_nous_subscription_features,
         gui_toolset_label)
-    # Surviving platforms' display labels (the messaging registry was removed in this fork).
-    _platform_labels = {"cli": "🖥️  CLI", "webhook": "🔗 Webhook",
-                        "api_server": "🌐 API Server", "cron": "⏰ Cron"}
+    from hermes_cli.platforms import platform_label
     from toolsets import resolve_toolset
     from utils import is_truthy_value
 
@@ -273,7 +271,7 @@ async def get_toolsets(profile: Optional[str] = None):
         result.append({
             "name": name, "label": gui_toolset_label(label), "description": desc,
             "platform": target_platform,
-            "platform_label": gui_toolset_label(_platform_labels.get(target_platform, target_platform)),
+            "platform_label": gui_toolset_label(platform_label(target_platform, target_platform)),
             "enabled": is_enabled, "available": is_enabled,
             "configured": configured[name], "tools": tools})
     return result

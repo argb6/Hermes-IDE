@@ -11,6 +11,7 @@ from hermes_cli.colors import Colors, color
 from hermes_cli.config import cfg_get, load_config, save_config, get_env_value
 from hermes_cli.nous_subscription import (
     NousSubscriptionFeatures, apply_nous_managed_defaults, get_nous_subscription_features)
+from hermes_cli.platforms import PLATFORMS as _PLATFORMS_REGISTRY
 from hermes_cli.toolset_scope import (
     _TOOLSET_PLATFORM_RESTRICTIONS, toolset_allowed_for_platform as _toolset_allowed_for_platform)
 from hermes_cli.toolset_validation import parse_platform_toolsets_value
@@ -58,19 +59,8 @@ _warned_invalid_platform_toolsets: Set[str] = set()
 
 PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 
-# Surviving (non-messaging) platform display config (dict-of-dicts for ``PLATFORMS[key]["label"]``).
-# The messaging platform registry was removed in this fork.
-PLATFORMS = {
-    "cli": {"label": "🖥️  CLI", "default_toolset": "hermes-cli"},
-    "webhook": {"label": "🔗 Webhook", "default_toolset": "hermes-webhook"},
-    "api_server": {"label": "🌐 API Server", "default_toolset": "hermes-api-server"},
-    "cron": {"label": "⏰ Cron", "default_toolset": "hermes-cron"},
-}
-
-
-def _platform_row(pkey: str) -> dict:
-    """Display row for any platform key (legacy configs may still name retired ones)."""
-    return PLATFORMS.get(pkey) or {"label": pkey, "default_toolset": f"hermes-{pkey}"}
+# Platform display config derived from the canonical registry (dict-of-dicts for ``PLATFORMS[key]["label"]``).
+PLATFORMS = {k: {"label": info.label, "default_toolset": info.default_toolset} for k, info in _PLATFORMS_REGISTRY.items()}
 
 # --- Toolset Registry ---
 # Toolsets shown in the configurator: (toolset key in toolsets.py TOOLSETS, label, description).
@@ -266,13 +256,13 @@ TOOL_CATEGORIES = {
                  stt_provider="openai", **_NOUS, managed_nous_feature="stt",
                  override_env_vars=["VOICE_TOOLS_OPENAI_KEY", "OPENAI_API_KEY"]),
             _row("OpenAI", "paid", "whisper-1, gpt-4o-transcribe, gpt-transcribe", [_OPENAI_VOICE_KEY], stt_provider="openai"),
-            _row("Groq", "free tier", "Whisper large-v3 family — very fast",
+            _row("Groq", "free tier", "whisper-large-v3-turbo, whisper-large-v3 — very fast",
                  [_key("GROQ_API_KEY", "Groq API key", "https://console.groq.com/keys")], stt_provider="groq"),
-            _row("xAI", tag="grok-stt — uses xAI Grok OAuth or XAI_API_KEY", stt_provider="xai", post_setup="xai_grok"),
+            _row("xAI", tag="Grok Voice Transcribe — uses xAI Grok OAuth or XAI_API_KEY", stt_provider="xai", post_setup="xai_grok"),
             _row("ElevenLabs Scribe", "paid", "scribe_v2 — diarization + audio-event tagging", [_ELEVENLABS_KEY],
                  stt_provider="elevenlabs"),
-            # Mistral Voxtral STT intentionally omitted — mistralai PyPI package quarantined (malicious 2.4.6
-            # release, 2026-05-12). Restore alongside the dashboard stt.provider option.
+            _row("Mistral Voxtral", "paid", "voxtral-mini-latest — multilingual",
+                 [_key("MISTRAL_API_KEY", "Mistral API key", "https://console.mistral.ai/")], stt_provider="mistral"),
             _row("DeepInfra", "paid", "Live STT catalog from api.deepinfra.com", [_DEEPINFRA_KEY], stt_provider="deepinfra"),
         ],
     },
@@ -569,6 +559,19 @@ def _coerce_platform_toolsets_value(value, platform: str):
             "(e.g. [terminal, file, web]) - falling back to the platform default. "
             "Run `hermes tools` to reconfigure.", platform, value)
     return value
+
+
+def _platform_toolsets_explicitly_saved(config: dict, platform: str) -> bool:
+    """True when ``platform_toolsets.<platform>`` holds an explicitly saved LIST (even ``[]``).
+
+    ``_get_platform_tools``'s ``explicitly_configured`` flag without re-running the resolver
+    (post-coercion, so a list-literal string counts too): an unset key or a non-list value
+    falls back to the platform default. Callers use this to tell an explicit zero-tool
+    selection (fail closed, #82010) from an absent one ("no restriction").
+    """
+    platform_toolsets = config.get("platform_toolsets") or {}
+    raw = platform_toolsets.get(platform)
+    return isinstance(_coerce_platform_toolsets_value(raw, platform), list)
 
 
 def _get_platform_tools(config: dict, platform: str, *, include_default_mcp_servers: bool = True) -> Set[str]:
@@ -960,7 +963,7 @@ def _configure_newly_added(added: Set[str], already: Set[str], config: dict) -> 
 def _platform_menu_label(config: dict, pkey: str) -> str:
     count = len(_current_platform_tools(config, pkey))
     total = len(_get_effective_configurable_toolsets())
-    return f"Configure {_platform_row(pkey)['label']}  ({count}/{total} enabled)"
+    return f"Configure {PLATFORMS[pkey]['label']}  ({count}/{total} enabled)"
 
 
 def _print_tools_summary(config: dict, enabled_platforms: List[str]) -> None:
@@ -969,7 +972,7 @@ def _print_tools_summary(config: dict, enabled_platforms: List[str]) -> None:
     print(color("☤ Tool Summary", Colors.CYAN, Colors.BOLD))
     print()
     for pkey, enabled in _platform_toolset_summary(config, enabled_platforms).items():
-        print(color(f"  {_platform_row(pkey)['label']}", Colors.BOLD) + color(f"  ({len(enabled)}/{total})", Colors.DIM))
+        print(color(f"  {PLATFORMS[pkey]['label']}", Colors.BOLD) + color(f"  ({len(enabled)}/{total})", Colors.DIM))
         for ts_key in sorted(enabled):
             print(color(f"    ✓ {_toolset_label(ts_key)}", Colors.GREEN))
         if not enabled:
@@ -1002,7 +1005,7 @@ def _checklist_diff(new_enabled: Set[str], prev: Set[str], platform: str) -> tup
 def _first_install_flow(config: dict, enabled_platforms: List[str]) -> None:
     """Fresh install: one checklist per platform, no menu, keys prompted for every enabled tool."""
     for pkey in enabled_platforms:
-        pinfo = _platform_row(pkey)
+        pinfo = PLATFORMS[pkey]
         current_enabled = _current_platform_tools(config, pkey)
         new_enabled = _prompt_toolset_checklist(pinfo["label"], current_enabled - _DEFAULT_OFF_TOOLSETS, pkey)
         _print_toolset_diff(*_checklist_diff(new_enabled, current_enabled, pkey))
@@ -1032,7 +1035,7 @@ def _apply_platform_checklist(config: dict, pkey: str, new_enabled: Set[str], pr
     but lacking provider config doesn't drop the user back to the main menu."""
     added, removed = _checklist_diff(new_enabled, prev, pkey)
     if header and (added or removed):
-        print(color(f"  {_platform_row(pkey)['label']}:", Colors.DIM))
+        print(color(f"  {PLATFORMS[pkey]['label']}:", Colors.DIM))
     _print_toolset_diff(added, removed, indent=indent)
     _configure_newly_added(added, already, config)
     _save_platform_tools(config, pkey, new_enabled)
@@ -1041,7 +1044,7 @@ def _apply_platform_checklist(config: dict, pkey: str, new_enabled: Set[str], pr
 def _configure_platforms(config: dict, platform_keys: List[str], *, all_platforms: bool = False) -> bool:
     """Checklist + key setup + save for one platform, or for every platform at once (the 'Configure all
     platforms (global)' menu entry). Returns True when config was saved."""
-    label = "All platforms" if all_platforms else _platform_row(platform_keys[0])["label"]
+    label = "All platforms" if all_platforms else PLATFORMS[platform_keys[0]]["label"]
     current = {pk: _current_platform_tools(config, pk) for pk in platform_keys}
     all_current = set().union(*current.values())
     new_enabled = _prompt_toolset_checklist(label, all_current, force_fresh=True)

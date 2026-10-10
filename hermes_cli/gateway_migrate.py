@@ -482,9 +482,11 @@ def _credential_claims(config) -> dict[tuple, str]:
 
 
 def _credential_key_names(platform_value: str) -> str:
-    """Label for the credential behind ``platform_value`` (env key NAMES, never values). The
-    messaging platform env-key registry was removed in this fork, so only the platform id remains."""
-    return f"the {platform_value} token"
+    """Env key NAMES (never values) that make ``platform_value`` connect as a bot, e.g.
+    ``TELEGRAM_BOT_TOKEN``; the platform id when no key is registered (config.yaml-only token)."""
+    from hermes_cli.profile_channels import credential_env_keys
+    names = sorted(key for key, pid in credential_env_keys().items() if pid == platform_value)
+    return "/".join(names) or f"the {platform_value} token"
 
 
 def duplicate_credential_lines(configs: list[tuple[str, object]]) -> list[str]:
@@ -574,7 +576,9 @@ def _listener_url(default_cfg, platform_value: str, profile: str) -> str:
     host = extra.get("host") or host
     port = extra.get("port") or port
     tail = {"api_server": "/v1/...", "webhook": "/webhooks/<route>"}.get(platform_value, "/...")
-    return f"http://{host}:{port}/p/{profile}{tail}"
+    from hermes_cli.url_utils import format_url_host
+
+    return f"http://{format_url_host(host)}:{port}/p/{profile}{tail}"
 
 
 def _check_secondary_port_binders(plan: MigrationPlan, configs: dict[str, object]) -> None:

@@ -290,7 +290,7 @@ def _(rid, params: dict) -> dict:
         row = {"name": p.name, "path": str(p.path), "is_default": bool(p.is_default), "model": p.model,
                "provider": p.provider, "description": p.description or "",
                "display_name": p.display_name or "", "skill_count": p.skill_count or 0,
-               "previous_names": list(p.previous_names or []), "role": p.role}
+               "previous_names": list(p.previous_names or [])}
         if include_sessions:
             _profile_session_fields(row, p.path)
         _profile_ui_meta_fields(row, Path(str(p.path)))
@@ -463,12 +463,6 @@ def _(rid, params: dict) -> dict:
     return _ok(rid, {"found": False})
 
 
-@_profile_handler("profiles.remember_onboarding", 5067)
-def _(rid, params: dict) -> dict:
-    from tui_gateway.onboarding_personalization import remember_onboarding
-    return _ok(rid, remember_onboarding(params.get("answers")))
-
-
 def _mirror_secret(path, launch_home, name: str, wanted) -> bool:
     """Copy the launch ``name`` file into the profile (0600) when it exists and ``wanted(src, dst)``."""
     src, dst = launch_home / name, path / name
@@ -552,6 +546,10 @@ def _mirror_launch_credentials(path, params: dict) -> dict:
     # .env: only over the seeded comment-only stub (never a clone's secrets).
     mirrored["env"] = _try(lambda: _mirror_secret(path, launch_home, ".env", lambda src, dst: (
         _env_has_content(src) and not _try(lambda: _env_has_content(dst), False))), False)
+    if mirrored["env"] and not is_truthy_value(params.get("clone_channels", False)):
+        # Provider/tool keys are what "mirror credentials" means; the launch profile's bot tokens
+        # and allowlists would make the new bot collide with it over one Telegram/Discord bot.
+        _best_effort(lambda: _lazy("hermes_cli.profile_channels", "strip_channel_env_file")(path / ".env"))
     if not share_auth:  # a copy forks token state: the first refresh in either store strands the other
         mirrored["auth"] = _try(lambda: _mirror_secret(path, launch_home, "auth.json",
                                                        lambda src, dst: not dst.exists()), False)

@@ -3,9 +3,10 @@ from typing import List, Optional, Set
 
 from hermes_cli.config import cfg_get, load_config, save_config
 from hermes_cli.colors import Colors, color
-# {key: label} view of the surviving (non-messaging) platforms (``PLATFORMS.items()`` /
-# ``.get(key)`` below); the messaging platform registry was removed in this fork.
-PLATFORMS = {"cli": "🖥️  CLI", "webhook": "🔗 Webhook", "cron": "⏰ Cron"}
+from hermes_cli.platforms import PLATFORMS as _PLATFORMS
+
+# {key: label} view of the messaging platforms (``PLATFORMS.items()`` / ``.get(key)`` below).
+PLATFORMS = {k: info.label for k, info in _PLATFORMS.items() if k != "api_server"}
 
 
 def _normalize_skill_names(values) -> Set[str]:

@@ -24,25 +24,3 @@ def add_yes_flag(parser: argparse.ArgumentParser, help: str = "Skip confirmation
 def add_json_flag(parser: argparse.ArgumentParser, help: str) -> None:
     """Attach ``--json`` (store_true) with the given help text."""
     parser.add_argument("--json", action="store_true", help=help)
-
-
-def add_removed_command(subparsers, name: str, feature: str) -> None:
-    """Register a retired top-level command as an explanatory stub (this fork).
-
-    The command keeps a friendly presence in ``--help`` and prints a removal
-    notice (exit 1) instead of running; unknown flags still fail argparse.
-    """
-    def _removed(args) -> int:
-        print(
-            f"hermes {name}: {feature} was removed in this fork "
-            "(localized, user-owned install of Hermes)."
-        )
-        return 1
-
-    parser = subparsers.add_parser(
-        name,
-        help=f"(removed) {feature} \u2014 removed in this fork",
-        description=f"{feature} was removed from this fork (localized, user-owned install of Hermes).",
-    )
-    parser.add_argument("removed_args", nargs="*", help=argparse.SUPPRESS)
-    parser.set_defaults(func=_removed)

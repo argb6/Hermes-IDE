@@ -3,6 +3,7 @@
 import ast
 from typing import Callable, List, Optional
 
+from hermes_cli.platforms import PLATFORMS
 from hermes_cli.toolset_scope import toolset_allowed_for_platform
 
 _NO_TOOLS = "the agent will have no tools on this platform. Run `hermes tools` to reconfigure."
@@ -30,9 +31,8 @@ def parse_platform_toolsets_value(value: object) -> Optional[List[str]]:
 
 
 def _platform_default_toolset(platform: object) -> str:
-    # The messaging platform registry was removed in this fork; surviving platforms all follow
-    # ``hermes-<platform>`` except api_server.
-    return "hermes-api-server" if platform == "api_server" else f"hermes-{platform}"
+    info = PLATFORMS.get(platform)
+    return info.default_toolset if info is not None else f"hermes-{platform}"
 
 
 def _platform_default_is_valid(
