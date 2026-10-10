@@ -54,7 +54,8 @@
   - 可疑方向：行级组件的全局 store 订阅放大（如 `assistant-message.tsx` 里每条消息订阅 `$currentModel`/`$connection`/`$activeGatewayProfile`，全局状态一变全量行重渲染）、markdown/代码高亮重复解析、滚动锚定开销（可能与“瞬移”同根因）。
 - **热点归因（2026-10-10，已完成）**：`--prod --cpuprofile` 在 stream-history 场景实测 top 自耗时——**shiki 语法高亮 214ms（最大项）**、`appendChild` 157ms（DOM 提交抖动）、markdown 解析（vendor-md 三个入口）合计 ~205ms、@assistant-ui 运行时消息查找 ~61ms、React 提交/协调 ~145ms、`setAttribute` 96ms（流式期间属性抖动）+ shiki oniguruma wasm 37ms。结论：卡顿主因是**流式/挂载期间的 markdown 解析 + 代码高亮 + DOM 重建**，窗口化机制之外的行内渲染开销，与“行级 store 订阅放大”假设一致。本机 --prod 基线：stream-history longtasks_n=10、longtask_max=160ms、transcript mount 534ms（dev）/ longtask 1712ms（dev）。
 - **下一步（修复循环，待续）**：① 代码块高亮按 (lang, 内容哈希) 记忆化、流式期间先渲染纯文本落定后再高亮；② 稳定行 identity 降低 appendChild/setAttribute 提交量；③ 本机 `--prod` 前后 A/B 对比（每次 ~6 分钟）。每改一处复测一处，杜绝盲改。
-- **状态**：热点已定位（数据如上），修复循环待续。
+- **2026-10-10 进展**：① 修好测量基建——`scripts/perf/run.mjs` 新增 `--home`/`--user-data`（或 `HERMES_PERF_HOME`/`HERMES_PERF_USER_DATA`）复用温热家目录；此前每跑一次全新 HERMES_HOME 首启 bootstrap 必超 90s 网关连接窗，指标全被重连抖动污染（"gateway did not connect"的根因）。② 排除"行级全局订阅放大"假设：`$currentModel`/`$connection` 等订阅在错误恢复叶子组件（ErrorRecoveryActions）而非每行，`$showToolActivity` 等为稳定设置项——不是放大器。③ 新教训：perf 与 dist 构建共享 dist 暂存，**不可并行**（并行会让 desktop.mjs 随机失败）。
+- **状态**：干净基线与修复循环仍待跑（测量基建已就绪，下一步用温热家目录跑 `--prod` 基线 → 修 → A/B）。
 
 ---
 
@@ -106,9 +107,9 @@
 - **测试契约同步**：channel-build-version 的 mac.publish 断言移植为"频道构建不进更新源"（Windows 合同）；prepared-native-deps 的源码变更检测改用 lockfile；新增回归与 HEAD 基线逐一对拍，零回归（既有失败面不变）。
 - **保留说明**：Python 核心与 CLI 的跨平台代码不动（agent 本体）；`scripts/docker_*.py` 被核心更新逻辑引用，保留；运行时 Electron 里的 darwin 小条件式未逐条拔除（爆炸半径大、无体积收益），仅删死透的功能与构建面。
 
-## 九、已知遗留（合并漂移，非本次清理引入）
+## 九、已知遗留（合并漂移）✅ 已修复（2026-10-10）
 
-- `src/app/settings/plugin-install-modal.tsx:66` 报 `AgentPluginInstallResult.enabled` 类型缺失 + 对应测试 `turns the desktop half on...` 失败——核心合并（ccd3d50）上游接口漂移所致，HEAD 上已存在，待修。
+- 病根：后端契约 `PluginsManageResult` 一直有 `enabled` 字段，桌面端 `AgentPluginInstallResult` 没映射——统一包安装后"Enable after install"永远不触发桌面半。已补类型/响应映射/返回三处，测试 10/10 过、tsc 归零。
 
 ---
 

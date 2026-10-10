@@ -1,0 +1,1 @@
+import{t as e}from"./atom-DPaP1HVd.js";var t=e(null);function n(e){return t.get()?.connections.find(t=>t.id===e)?.kind}function r(){return t.get()!==null||!!window.hermesDesktop?.connections?.list}export{r as n,n as r,t};

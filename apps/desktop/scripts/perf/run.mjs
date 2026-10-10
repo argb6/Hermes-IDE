@@ -156,10 +156,17 @@ async function main() {
     record('cold-start', 'cold', medianMetrics(perRun), { runs, warm: !('cold-fresh' in flags) })
   }
 
-  // Steady-state scenarios share one persistent connection.
+  // Steady-state scenarios share one persistent connection. A warm, reusable
+  // home (--home / HERMES_PERF_HOME, plus --user-data / HERMES_PERF_USER_DATA)
+  // skips the per-run first-launch bootstrap that otherwise blows the
+  // gateway-connect window and inflates every metric with reconnect churn.
   if (liveNames.length) {
+    const warmHome = flags.home ? resolve(String(flags.home)) : process.env.HERMES_PERF_HOME
+    const warmUserData = flags['user-data']
+      ? resolve(String(flags['user-data']))
+      : process.env.HERMES_PERF_USER_DATA
     const connection = flags.spawn
-      ? await startIsolatedInstance({ port, devPort, prod })
+      ? await startIsolatedInstance({ port, devPort, prod, hermesHome: warmHome, userDataDir: warmUserData })
       : await attach({ port, match: prod ? undefined : String(devPort) })
 
     const { cdp, teardown } = connection

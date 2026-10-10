@@ -1,0 +1,1 @@
+import{n as e}from"./persisted-hR0gicLq.js";var t=e(`hermes.desktop.workspaceMode`,`ide`,{decode:e=>e===`agent`?`agent`:`ide`,encode:e=>e});function n(e){t.set(e)}export{n,t};
