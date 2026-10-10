@@ -336,3 +336,6 @@ apps/desktop/.dist-*/
 
 # Local-only work backlog (never pushed)
 TODO.md
+
+# Perf measurement dumps (machine paths, never committed)
+apps/desktop/scripts/perf/*.cpuprofile
