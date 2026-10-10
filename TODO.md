@@ -112,6 +112,18 @@
 
 ---
 
+## 十、小米模型"必须挂 VPN"问题 —— 已诊断（2026-10-10）
+
+- **诊断结论**：不是被墙。`api.xiaomimimo.com` CNAME 到小米自有 ALB（`mimo-pri-prod.alb.xiaomi.com` → 124.251.34.38），国内权威 DNS 与 AliDNS 解析一致、无污染；实测直连 `/v1/models` 0.49s 返回 401（服务正常应答）。"关 VPN 就不能用"是你本地网络到该 IP 的**路由问题**，不是 GFW/域名问题。
+- **代码事实**：Hermes 的模型 HTTP 客户端已经支持代理——`agent/process_bootstrap.py:170-183` 按 `HTTPS_PROXY / HTTP_PROXY / ALL_PROXY`（大小写不敏感）选代理，并按 `NO_PROXY`（CIDR、`*.` 通配、host:port）豁免；`.env` 里的变量会被后端加载进进程环境，因此直接生效。
+- **今天就能用的解法**（不动代码）：在 `D:\Hermes-IDE\hermes\.env` 加两行——
+  `HTTPS_PROXY=http://127.0.0.1:<你的本地代理端口>`（Clash/Mihomo 默认 7890，V2Ray 常 10809）
+  `NO_PROXY=localhost,127.0.0.1,.cn`（国内站点直连，只有模型走代理）
+  重启桌面应用即可：只要代理工具的本地端口在监听，无需全局 VPN。
+- **待确认**：若你的"VPN"是纯全局 TUN（没有本地端口），则无本地端口可指，代码侧无解；确认工具类型后可决定是否做 `model.proxy_url` 配置项 + 设置页（与 `gateway.proxy_url` 同风格）。
+
+---
+
 ## 附：环境备忘（不影响仓库代码）
 
 - 本机 `node_modules` 曾有 8 个包解压损坏（`radix-ui`、`shiki`、`streamdown`、`@streamdown/code`、`@streamdown/math`、`remend`、`cross-env`、`@audiowave/react`、`@nous-research/ui`）——这是之前大批 vitest 测试文件“无法运行”的根因，**已修复**。
