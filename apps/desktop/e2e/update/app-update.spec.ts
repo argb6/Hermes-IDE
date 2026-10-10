@@ -1,7 +1,7 @@
 /**
  * Failure class: APP-DRIVEN UPDATE completes.
  *
- * A user on a healthy local install (scripts/install.sh + `hermes desktop`)
+ * A user on a healthy local install (scripts/install.ps1 + `hermes desktop`)
  * sees "Update now" in Settings → About when upstream main moves, clicks it,
  * and the app hands off to the updater, quits, updates, and comes back:
  *   - the backend checkout is on the new upstream commit, clean;

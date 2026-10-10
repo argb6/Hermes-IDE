@@ -180,14 +180,7 @@ export const SETTINGS_MANIFEST = {
       copy: t => ({ label: t.settings.quickEntry.shortcutTitle, description: t.settings.quickEntry.shortcutDesc })
     }
   },
-  keybinds: {
-    screenshot: {
-      subpage: 'screen-capture',
-      keywords: ['screenshot', 'screen capture', 'window', 'attach', 'command keys'],
-      available: () => Boolean(window.hermesDesktop?.screenshot),
-      copy: t => ({ label: t.settings.screenshot.enabledTitle, description: t.settings.screenshot.enabledDesc })
-    }
-  },
+  keybinds: {},
   notifications: {
     enableAll: {
       subpage: 'alerts',

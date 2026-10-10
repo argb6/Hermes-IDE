@@ -99,6 +99,19 @@
 
 ---
 
+## 八、Windows 专属化清理 ✅（2026-10-10）
+
+- **删掉的无关平台非必需品（55 文件）**：macOS 签名/公证全家（mac-sign、mac-icon、notarize×2、sign-nested-chromium、sign-wheel-zips、entitlements.mac×2）、DMG 打包（dmgbuild 诊断、prepare-dmgbuild×2、dmg 美术×2、macos-sysroot×3）、mac 构建钩子（patch-electron-builder-mac-binary）、Unix 安装器 `scripts/install.sh`、macOS 手势截图功能整族（command-screenshot×5 + .m 原生源 + 渲染层设置/组合器钩子/快捷键设置行/导航项）、mac 资产（icon.icns×2）、docker 镜像晋升工作流。
+- **裁剪的共享面**：`electron-builder.config.cjs`（418→289 行，mac/dmg/linux 块全删）、after-pack/run-electron-builder/prepare-packaging-tools/prepared-packaging 去 mac/linux 分支、`test-desktop.mjs` 仅剩 win32、bootstrap 的 tauri.conf.json（targets→nsis、去 macOS 块与 icns、publisher=Hermes-IDE、copyright 置空以对齐"无公司信息"）、BUILDING.md/README.md 平台表与 mac 章节删除。
+- **测试契约同步**：channel-build-version 的 mac.publish 断言移植为"频道构建不进更新源"（Windows 合同）；prepared-native-deps 的源码变更检测改用 lockfile；新增回归与 HEAD 基线逐一对拍，零回归（既有失败面不变）。
+- **保留说明**：Python 核心与 CLI 的跨平台代码不动（agent 本体）；`scripts/docker_*.py` 被核心更新逻辑引用，保留；运行时 Electron 里的 darwin 小条件式未逐条拔除（爆炸半径大、无体积收益），仅删死透的功能与构建面。
+
+## 九、已知遗留（合并漂移，非本次清理引入）
+
+- `src/app/settings/plugin-install-modal.tsx:66` 报 `AgentPluginInstallResult.enabled` 类型缺失 + 对应测试 `turns the desktop half on...` 失败——核心合并（ccd3d50）上游接口漂移所致，HEAD 上已存在，待修。
+
+---
+
 ## 附：环境备忘（不影响仓库代码）
 
 - 本机 `node_modules` 曾有 8 个包解压损坏（`radix-ui`、`shiki`、`streamdown`、`@streamdown/code`、`@streamdown/math`、`remend`、`cross-env`、`@audiowave/react`、`@nous-research/ui`）——这是之前大批 vitest 测试文件“无法运行”的根因，**已修复**。

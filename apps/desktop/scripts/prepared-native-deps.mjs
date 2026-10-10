@@ -11,10 +11,6 @@ function nativeIdentity(source) {
     fileDigest(path.join(source, 'apps/desktop/package.json')),
     fileDigest(path.join(import.meta.dirname, 'stage-native-deps.mjs')),
     fileDigest(path.join(import.meta.dirname, 'prepared-native-deps.mjs')),
-    ...['build-command-screenshot-monitor.mjs']
-      .map(name => fileDigest(path.join(import.meta.dirname, name))),
-    ...['command-screenshot-monitor.m']
-      .map(name => fileDigest(path.join(source, 'apps/desktop/electron/native', name))),
   ])).digest('hex')
 }
 

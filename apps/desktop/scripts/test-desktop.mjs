@@ -16,16 +16,6 @@ const PLATFORM = process.platform
 // Platform-specific packaged-app layout. The bundled app ships an Electron
 // shell and the PM payload under resources/agent-payload.
 const APP = (() => {
-  if (PLATFORM === 'darwin') {
-    const appPath = path.join(RELEASE_ROOT, `mac-${ARCH}`, 'Hermes.app')
-    return {
-      appPath,
-      binary: path.join(appPath, 'Contents', 'MacOS', 'Hermes'),
-      resourcesPath: path.join(appPath, 'Contents', 'Resources'),
-      asarPath: path.join(appPath, 'Contents', 'Resources', 'app.asar'),
-      unpackedDistIndex: path.join(appPath, 'Contents', 'Resources', 'app.asar.unpacked', 'dist', 'index.html')
-    }
-  }
   if (PLATFORM === 'win32') {
     // electron-builder names the unpacked output per-arch: win-arm64-unpacked
     // on arm64, plain win-unpacked on x64. Accept either so the harness works
@@ -43,15 +33,7 @@ const APP = (() => {
         : path.join(RELEASE_ROOT, 'win-unpacked', 'resources', 'app.asar.unpacked', 'dist', 'index.html')
     }
   }
-  // linux unpacked layout matches windows but with different binary name
-  const unpacked = path.join(RELEASE_ROOT, 'linux-unpacked')
-  return {
-    appPath: unpacked,
-    binary: path.join(unpacked, 'Hermes'),
-    resourcesPath: path.join(unpacked, 'resources'),
-    asarPath: path.join(unpacked, 'resources', 'app.asar'),
-    unpackedDistIndex: path.join(unpacked, 'resources', 'app.asar.unpacked', 'dist', 'index.html')
-  }
+  die(`Desktop bundle validation is only wired for win32; platform=${PLATFORM} is not supported.`)
 })()
 
 const FRESH_SANDBOX_ROOT = path.join(os.tmpdir(), 'hermes-desktop-fresh-install')
@@ -100,12 +82,8 @@ function expectedNativeDepPaths() {
 }
 
 function ensurePlatformBuilds() {
-  if (PLATFORM === 'darwin') return
   if (PLATFORM === 'win32') return
-  if (PLATFORM === 'linux') return
-  die(
-    `Desktop bundle validation is only wired for darwin / win32 / linux; platform=${PLATFORM} is not supported.`
-  )
+  die(`Desktop bundle validation is only wired for win32; platform=${PLATFORM} is not supported.`)
 }
 
 function ensurePackagedApp() {
@@ -116,54 +94,9 @@ function ensurePackagedApp() {
   run('npm', ['run', 'pack'])
 }
 
-function resolveDmgPath() {
-  if (!exists(RELEASE_ROOT)) {
-    return path.join(RELEASE_ROOT, `Hermes-${PACKAGE_JSON.version}-${ARCH}.dmg`)
-  }
-
-  const prefix = `Hermes-${PACKAGE_JSON.version}`
-  const candidates = fs
-    .readdirSync(RELEASE_ROOT)
-    .filter(name => name.endsWith('.dmg'))
-    .filter(name => name.startsWith(prefix))
-    .filter(name => name.includes(ARCH))
-    .sort((a, b) => {
-      const aMtime = fs.statSync(path.join(RELEASE_ROOT, a)).mtimeMs
-      const bMtime = fs.statSync(path.join(RELEASE_ROOT, b)).mtimeMs
-      return bMtime - aMtime
-    })
-
-  return candidates.length > 0
-    ? path.join(RELEASE_ROOT, candidates[0])
-    : path.join(RELEASE_ROOT, `Hermes-${PACKAGE_JSON.version}-${ARCH}.dmg`)
-}
-
-function resolveMsixPath() {
-  if (!exists(RELEASE_ROOT)) return null
-  const candidates = fs
-    .readdirSync(RELEASE_ROOT)
-    .filter(name => /\.msix$/i.test(name) && /win/i.test(name))
-    .sort((a, b) => {
-      const aMtime = fs.statSync(path.join(RELEASE_ROOT, a)).mtimeMs
-      const bMtime = fs.statSync(path.join(RELEASE_ROOT, b)).mtimeMs
-      return bMtime - aMtime
-    })
-  return candidates.length > 0 ? path.join(RELEASE_ROOT, candidates[0]) : null
-}
-
-function ensureDmg() {
-  if (PLATFORM !== 'darwin') {
-    die('DMG mode is macOS-only; on Windows use the `msix` mode instead.')
-  }
-  if (process.env.HERMES_DESKTOP_SKIP_BUILD === '1' && exists(resolveDmgPath())) {
-    return
-  }
-  run('npm', ['run', 'dist:mac:dmg'])
-}
-
 function ensureMsix() {
   if (PLATFORM !== 'win32') {
-    die('MSIX mode is win32-only; on macOS use the `dmg` mode instead.')
+    die('MSIX mode is win32-only.')
   }
   if (process.env.HERMES_DESKTOP_SKIP_BUILD === '1' && resolveMsixPath()) {
     return
@@ -176,25 +109,8 @@ function openApp() {
     die(`Missing packaged app: ${APP.binary}`)
   }
 
-  if (PLATFORM === 'darwin') {
-    run('open', ['-n', APP.appPath])
-  } else if (PLATFORM === 'win32') {
-    // Spawn detached so the test script exits while the app keeps running.
-    spawn(APP.binary, [], { detached: true, stdio: 'ignore' }).unref()
-  } else {
-    spawn(APP.binary, [], { detached: true, stdio: 'ignore' }).unref()
-  }
-}
-
-function openDmg() {
-  if (PLATFORM !== 'darwin') {
-    die('DMG mode is macOS-only.')
-  }
-  const dmgPath = resolveDmgPath()
-  if (!exists(dmgPath)) {
-    die(`Missing DMG: ${dmgPath}`)
-  }
-  run('open', [dmgPath])
+  // Spawn detached so the test script exits while the app keeps running.
+  spawn(APP.binary, [], { detached: true, stdio: 'ignore' }).unref()
 }
 
 const CREDENTIAL_ENV_SUFFIXES = [
@@ -501,16 +417,6 @@ function validateBundle() {
   if (nodeBinaries.length === 0) {
     die(`No .node native binaries found in: ${nativeBinaryDirs.join(', ')}`)
   }
-  // Darwin requires a runtime-execed spawn-helper alongside pty.node; missing
-  // it manifests as "ENOENT: spawn-helper" on first pty.spawn() call.
-  if (PLATFORM === 'darwin') {
-    const spawnHelper = nativeBinaryDirs
-      .map(dir => path.join(dir, 'spawn-helper'))
-      .find(exists)
-    if (!spawnHelper) {
-      die(`Missing node-pty spawn-helper (required on darwin) in: ${nativeBinaryDirs.join(', ')}`)
-    }
-  }
 
   // Renderer payload check (either unpacked or in the asar)
   if (exists(APP.unpackedDistIndex)) {
@@ -535,12 +441,8 @@ function printArtifacts(options = {}) {
 
   console.log('\nDesktop artifacts:')
   console.log(`  app: ${APP.appPath}`)
-  if (PLATFORM === 'darwin') {
-    console.log(`  dmg: ${resolveDmgPath()}`)
-  } else if (PLATFORM === 'win32') {
-    const msix = resolveMsixPath()
-    if (msix) console.log(`  package: ${msix}`)
-  }
+  const msix = resolveMsixPath()
+  if (msix) console.log(`  package: ${msix}`)
   if (payloadManifest) {
     console.log(`  payload: ${payloadManifest.repo} + ${payloadManifest.venv}`)
   }
@@ -553,8 +455,7 @@ function help() {
   console.log(`Usage:
   npm run test:desktop:existing  # build packaged app, launch with normal PATH/existing Hermes
   npm run test:desktop:fresh     # build packaged app, launch with temp userData + HERMES_HOME
-  npm run test:desktop:dmg       # (macOS only) build DMG and open it
-  npm run test:desktop:msix      # (win32 only) build MSIX package
+  npm run test:desktop:msix      # build MSIX package
   npm run test:desktop:all       # build the platform package and validate the payload
 
 Fast rerun (skip rebuild if the packaged app already exists):
@@ -582,21 +483,11 @@ if (MODE === 'existing') {
   ensurePackagedApp()
   const result = validateBundle()
   printArtifacts({ ...launchFresh(), ...result })
-} else if (MODE === 'dmg') {
-  ensureDmg()
-  openDmg()
-  printArtifacts()
 } else if (MODE === 'msix') {
   ensureMsix()
   printArtifacts(validateBundle())
 } else if (MODE === 'all') {
-  if (PLATFORM === 'darwin') {
-    ensureDmg()
-  } else if (PLATFORM === 'win32') {
-    ensureMsix()
-  } else {
-    ensurePackagedApp()
-  }
+  ensureMsix()
   printArtifacts(validateBundle())
 } else if (MODE === 'lifecycle') {
   ensurePackagedApp()

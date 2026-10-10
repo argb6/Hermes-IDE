@@ -33,7 +33,6 @@ import {
 } from '@/store/keybinds'
 
 import { SettingsBreadcrumbContext, SettingsContent } from './primitives'
-import { ScreenshotSettings } from './screenshot-settings'
 import { useSettingDeepLink } from './use-setting-deep-link'
 
 interface KeybindSettingsProps {
@@ -43,18 +42,10 @@ interface KeybindSettingsProps {
 export function KeybindSettings({ subpage }: KeybindSettingsProps = {}) {
   useSettingDeepLink('keybinds', page => subpage === undefined || page === subpage)
 
-  if (subpage === 'screen-capture') {
-    return (
-      <SettingsContent>
-        <ScreenshotSettings />
-      </SettingsContent>
-    )
-  }
-
-  return <ShortcutSettings includeScreenshot={subpage === undefined} />
+  return <ShortcutSettings />
 }
 
-function ShortcutSettings({ includeScreenshot }: { includeScreenshot: boolean }) {
+function ShortcutSettings() {
   const { t } = useI18n()
   const hasBreadcrumb = useContext(SettingsBreadcrumbContext)
   const bindings = useStore($bindings)
@@ -136,11 +127,6 @@ function ShortcutSettings({ includeScreenshot }: { includeScreenshot: boolean })
           {k.resetAll}
         </button>
       </div>
-
-      {includeScreenshot &&
-        (!isSearching || t.settings.screenshot.enabledTitle.toLowerCase().includes(query.toLowerCase())) && (
-          <ScreenshotSettings />
-        )}
 
       <div className="pb-3">
         <SearchField

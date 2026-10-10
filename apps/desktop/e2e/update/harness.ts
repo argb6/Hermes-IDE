@@ -1,6 +1,6 @@
 /**
  * Harness for the Desktop install/update suite: a REAL local install (made by
- * scripts/install.sh + `hermes desktop --build-only` in the upgrade suite's
+ * scripts/install.ps1 + `hermes desktop --build-only` in the upgrade suite's
  * sandbox, see seed.py), a local bare origin standing in for GitHub, the
  * packaged app that install built, and the core suite's scripted provider.
  *

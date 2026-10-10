@@ -131,7 +131,6 @@ import { closeStopFailureMessage, finishWindowsCloseStop, type RuntimeLock } fro
 import { shouldAttemptCloudBootCascade } from './cloud-boot-cascade'
 import { discoverWithTeamFallback } from './cloud-discovery'
 import { createCloudSessionRecovery } from './cloud-session-recovery'
-import { installCommandScreenshot } from './command-screenshot'
 import { composerImageTimestamp } from './composer-image-name'
 import { writeComposerPaste } from './composer-paste'
 import { applyConnectionChange, teardownSshState } from './connection-apply'
@@ -19183,11 +19182,10 @@ app.whenReady().then(() => {
     createWindow
   })
 
-  // After the first window exists: fonts, spellcheck, screenshot IPC, SSH
+  // After the first window exists: fonts, spellcheck, SSH
   // recovery and the lag watchdog are not needed to paint or startHermes.
   ensureWslWindowsFonts()
   configureSpellChecker()
-  installCommandScreenshot({ rendererUrl: DEV_SERVER || pathToFileURL(resolveRendererIndex()).toString() })
   mainProcessLagWatchdog.start()
   // A hard crash can interrupt the in-memory restore loop after exact remote
   // serves were drained. The owner-only recovery journal survives that crash;

@@ -7,7 +7,7 @@ import { defineConfig } from '@playwright/test'
  *
  * Every spec drives the packaged app a real install built, against that
  * install's real backend, and updates it through the app's own "Update now".
- * globalSetup builds the install once (scripts/install.sh + `hermes desktop
+ * globalSetup builds the install once (scripts/install.ps1 + `hermes desktop
  * --build-only`); each spec restores that snapshot, so specs run serially.
  *
  *  - retries: 0 (a required lane must expose flake, not hide it);

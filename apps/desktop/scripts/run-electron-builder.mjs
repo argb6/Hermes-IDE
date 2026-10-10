@@ -10,8 +10,7 @@ import { pinnedPackageRoot } from './prepare-packaging-tools.mjs'
 
 const source = path.resolve(import.meta.dirname, '../../..')
 const app = path.join(source, 'apps/desktop')
-const platformFlags = new Map([['--win', 'win32'], ['-w', 'win32'], ['--windows', 'win32'],
-  ['--mac', 'darwin'], ['--macos', 'darwin'], ['-m', 'darwin'], ['-o', 'darwin'], ['--linux', 'linux'], ['-l', 'linux']])
+const platformFlags = new Map([['--win', 'win32'], ['-w', 'win32'], ['--windows', 'win32']])
 const architectures = ['--x64', '--arm64', '--ia32', '--armv7l', '--universal']
 
 // electron-builder's asar/blockmap pass outgrows the default V8 heap. Set here,
@@ -59,7 +58,7 @@ export function validatePreparedBuilderArgs(args, inputs) {
       continue
     }
     if (arg === '--dir' || arg === '--publish=never' || arg === '--') continue
-    if (/^(?:-c|--config)\.(?:extraMetadata\.(?:version|shortVersion|shortVersionWindows)|directories\.output|mac\.identity)=/.test(arg)) continue
+    if (/^(?:-c|--config)\.(?:extraMetadata\.(?:version|shortVersion|shortVersionWindows)|directories\.output)=/.test(arg)) continue
     if (!arg.startsWith('-') && inputs.formats.includes(arg)) continue
     throw preparationRequired(`Argument is not admitted by prepared packaging: ${arg}`)
   }
@@ -149,17 +148,11 @@ export function runElectronBuilder(args, { spawn = spawnSync } = {}) {
   pinnedPackageRoot(source, 'app-builder-lib')
   const require = createRequire(path.join(builder, 'package.json'))
   const bin = require(path.join(builder, 'package.json')).bin['electron-builder']
-  const preloads = []
-  if (process.platform === 'darwin') {
-    preloads.push('--import', path.join(import.meta.dirname, 'patch-electron-builder-mac-binary.mjs'))
-    preloads.push('--require', path.join(import.meta.dirname, 'dmgbuild-diagnostics.cjs'))
-  }
   /** @type {NodeJS.ProcessEnv} */
   const env = { ...process.env, NODE_OPTIONS: builderNodeOptions(), HERMES_PREPARED_PACKAGING: manifest,
     HERMES_PREPARED_NATIVE_DEPS: nativeDeps, HERMES_PREPARED_TARGET: inputs.target }
-  if (inputs.dmgbuild) env.CUSTOM_DMGBUILD_PATH = inputs.dmgbuild
   if (inputs.windows?.dotnetRoot) env.DOTNET_ROOT = inputs.windows.dotnetRoot
-  const result = spawn(process.execPath, [...preloads, path.join(builder, bin), ...args,
+  const result = spawn(process.execPath, [path.join(builder, bin), ...args,
     '--config', 'electron-builder.config.cjs', '--publish', 'never', `-c.electronDist=${inputs.electron}`,
     ...toolsetArguments(inputs)], { cwd: app, stdio: 'inherit', env })
   if (result.error) throw result.error
@@ -169,10 +162,9 @@ export function runElectronBuilder(args, { spawn = spawnSync } = {}) {
 /** @param {string[]} args @returns {string[]} */
 function sourceFormats(args) {
   if (args.includes('--dir')) return ['dir']
-  const formats = args.filter(arg => ['dmg', 'zip', 'msix', 'nsis', 'AppImage', 'deb', 'rpm'].includes(arg))
-  const platform = selectedPlatform(args)
+  const formats = args.filter(arg => ['zip', 'msix', 'nsis'].includes(arg))
   const winDefault = process.env.HERMES_DESKTOP_WIN_TARGET === 'nsis' ? ['nsis'] : ['msix']
-  return formats.length ? formats : platform === 'darwin' ? ['dmg', 'zip'] : platform === 'win32' ? winDefault : ['AppImage']
+  return formats.length ? formats : winDefault
 }
 
 if (isMain(import.meta.url)) process.exitCode = runElectronBuilder(process.argv.slice(2))

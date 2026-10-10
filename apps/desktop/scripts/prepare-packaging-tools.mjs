@@ -7,7 +7,6 @@ import { parseArgs } from 'node:util'
 import { isMain } from './utils.mjs'
 import { publishPackagingInputs } from './prepared-packaging.mjs'
 import { ensureWindowsBundleTools } from './windows-bundle-tools.mjs'
-import { prepareDmgbuild } from './prepare-dmgbuild.mjs'
 
 /** @param {string} source @param {string} name @returns {string} */
 export function pinnedPackageRoot(source, name) {
@@ -45,10 +44,10 @@ function copyTool(from, to) {
 /**
  * Acquire bytes without signing credentials. Builder modules are loaded only
  * after the explicit cache root has been selected, before their lazy state runs.
- * @param {{ source: string, out: string, cache: string, target?: string, formats?: string[], dmgbuild?: string }} options
+ * @param {{ source: string, out: string, cache: string, target?: string, formats?: string[] }} options
  * @returns {Promise<string>}
  */
-async function preparePackagingTools({ source, out, cache, target = `${process.platform}-${process.arch}`, formats, dmgbuild }) {
+async function preparePackagingTools({ source, out, cache, target = `${process.platform}-${process.arch}`, formats }) {
   source = fs.realpathSync(source)
   out = path.resolve(out)
   cache = path.resolve(cache)
@@ -59,19 +58,14 @@ async function preparePackagingTools({ source, out, cache, target = `${process.p
   pinnedPackageRoot(source, 'electron-builder')
   const require = createRequire(path.join(source, 'apps/desktop/package.json'))
   const config = require(path.join(source, 'apps/desktop/electron-builder.config.cjs'))
-  formats ??= process.platform === 'win32'
-    ? (process.env.HERMES_DESKTOP_WIN_TARGET === 'nsis' ? ['nsis'] : ['msix'])
-    : process.platform === 'darwin' ? ['dmg', 'zip'] : ['AppImage']
-  if (process.env.CUSTOM_DMGBUILD_PATH) throw new Error('Preparation must select the pinned dmgbuild supplier, not CUSTOM_DMGBUILD_PATH')
-  const supported = process.platform === 'win32'
-    ? ['dir', 'msix', 'nsis', 'zip']
-    : process.platform === 'darwin' ? ['dir', 'dmg', 'zip'] : ['dir', 'AppImage', 'deb', 'rpm', 'zip']
+  formats ??= process.env.HERMES_DESKTOP_WIN_TARGET === 'nsis' ? ['nsis'] : ['msix']
+
+  const supported = ['dir', 'msix', 'nsis', 'zip']
   if (formats.some(format => !supported.includes(format))) throw new Error(`Unsupported prepared package formats: ${formats.join(', ')}`)
-  const dmg = formats.includes('dmg') ? prepareDmgbuild({ source, out, cache, binary: dmgbuild }) : null
   const previousCache = process.env.ELECTRON_BUILDER_CACHE
   process.env.ELECTRON_BUILDER_CACHE = path.join(cache, 'builder')
   try {
-    return await acquirePackagingTools({ source, out, cache, target, formats, builderRoot, config, dmgbuild: dmg })
+    return await acquirePackagingTools({ source, out, cache, target, formats, builderRoot, config })
   } finally {
     if (previousCache === undefined) delete process.env.ELECTRON_BUILDER_CACHE
     else process.env.ELECTRON_BUILDER_CACHE = previousCache
@@ -79,10 +73,10 @@ async function preparePackagingTools({ source, out, cache, target = `${process.p
 }
 
 /**
- * @param {{ source: string, out: string, cache: string, target: string, formats: string[], builderRoot: string, config: import('app-builder-lib').Configuration, dmgbuild: string | null }} options
+ * @param {{ source: string, out: string, cache: string, target: string, formats: string[], builderRoot: string, config: import('app-builder-lib').Configuration }} options
  * @returns {Promise<string>}
  */
-async function acquirePackagingTools({ source, out, cache, target, formats, builderRoot, config, dmgbuild }) {
+async function acquirePackagingTools({ source, out, cache, target, formats, builderRoot, config }) {
   /** @param {string} relative */
   const load = (relative) => import(pathToFileURL(path.join(builderRoot, 'dist', relative)).href)
   const [electronGet, sevenZip, icons] = await Promise.all([
@@ -115,24 +109,14 @@ async function acquirePackagingTools({ source, out, cache, target, formats, buil
       dlib: path.join(kit, 'Azure.CodeSigning.Dlib.dll'), dotnetRoot: copyTool(tools.dotnetRoot, path.join(out, 'dotnet')) }
     toolsets.winCodeSign = kitRoot
   }
-  if (formats.includes('AppImage')) {
-    const appimage = await load('toolsets/appimage.js')
-    const { Arch } = await import(pathToFileURL(path.join(builderRoot, 'dist/index.js')).href)
-    const tools = await appimage.getAppImageTools(config.toolsets?.appimage, Arch[packagingTargetArch(target)], resourcesDir)
-    toolsets.appimage = copyTool(path.dirname(tools.mksquashfs), path.join(out, 'appimage'))
-  }
-  if (formats.some(format => format === 'deb' || format === 'rpm')) {
-    const fpm = await load('toolsets/fpm.js')
-    toolsets.fpm = copyTool(path.dirname(await fpm.getFpmPath(config.toolsets?.fpm, resourcesDir)), path.join(out, 'fpm'))
-  }
-  return publishPackagingInputs({ source, out, target, formats, electron, toolsets, windows, dmgbuild })
+  return publishPackagingInputs({ source, out, target, formats, electron, toolsets, windows })
 }
 
 if (isMain(import.meta.url)) {
   const { values } = parseArgs({ options: {
     source: { type: 'string' }, out: { type: 'string' }, cache: { type: 'string' }, target: { type: 'string' },
-    format: { type: 'string', multiple: true }, dmgbuild: { type: 'string' },
+    format: { type: 'string', multiple: true },
   } })
-  if (!values.source || !values.out || !values.cache) throw new Error('Usage: prepare-packaging-tools.mjs --source REPO --out WORK/packager --cache CACHE/packager [--target same-OS-target] [--format FORMAT] [--dmgbuild PM_BINARY]')
-  console.log(await preparePackagingTools({ source: values.source, out: values.out, cache: values.cache, target: values.target, formats: values.format, dmgbuild: values.dmgbuild }))
+  if (!values.source || !values.out || !values.cache) throw new Error('Usage: prepare-packaging-tools.mjs --source REPO --out WORK/packager --cache CACHE/packager [--target same-OS-target] [--format FORMAT]')
+  console.log(await preparePackagingTools({ source: values.source, out: values.out, cache: values.cache, target: values.target, formats: values.format }))
 }

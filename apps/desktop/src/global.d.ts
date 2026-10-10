@@ -2,7 +2,6 @@ import type { GatewayWsUrlResult } from '@hermes/shared'
 import type { HermesSkin } from '@hermes/shared/skin'
 import type { TranslucencyState } from '@hermes/shared/translucency'
 
-import type { ScreenshotApi } from '../electron/command-screenshot-types'
 import type { DapBridge, ExtBridge, LspBridge } from '../electron/ide/contract'
 import type { MachineProfile } from '../electron/machine-profile'
 import type { HermesNotification } from '../electron/notification-types'
@@ -158,8 +157,6 @@ declare global {
         onCursor: (callback: (point: { x: number; y: number } | null) => void) => () => void
         onGameOverlay: (callback: (state: { active: boolean; app: string }) => void) => () => void
       }
-      // macOS native screenshot gesture; absent on other platforms.
-      screenshot?: ScreenshotApi
       // Quick Entry: a global-hotkey mini composer window. Main owns the OS
       // shortcut registration + the persisted preference (it must restore the
       // shortcut on a cold launch without the renderer visiting Settings), so

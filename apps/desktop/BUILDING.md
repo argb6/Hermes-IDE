@@ -9,8 +9,6 @@ commands package the current desktop build; they do not stage a fresh runtime.
 |---|---|---|
 | Windows x64 / ARM64, sideload | Signed per-architecture MSIX packages, combined into a universal `.msixbundle`; `.appinstaller` descriptor | Windows App Installer |
 | Windows x64 / ARM64, Store | Store-identity MSIX packages and a separate Store bundle | Microsoft Store |
-| macOS ARM64 / x64 | Signed, notarized `Hermes.app` in DMG and ZIP artifacts | `electron-updater` with Squirrel.Mac |
-| Linux x64 / ARM64 | Local builder can produce AppImage | External replacement; Linux desktop release legs are disabled |
 
 The current MSIX manifest requires Windows 11 22H2 (`10.0.22621.0`).
 The source-script Windows support range is separate from this package floor.
@@ -66,9 +64,6 @@ Acceptance requires a native run with the actual signed release artifacts.
 
 Packaged tool facts describe the final bytes, not only the staged archives.
 Windows refreshes the tool digests after sanitization and batch signing.
-The macOS custom signer retains the builder's entitlements and file selection.
-It refreshes digests after child signatures and before the outer app signature.
-Unsigned macOS builds refresh them at the end of `afterPack`.
 Do not refresh facts in `afterSign`: that changes resources covered by the signature.
 
 ## Complete native build
@@ -86,8 +81,7 @@ Preparation asks PM for the pinned Python, Node, npm and private installer;
 preinstalling a separate Node/npm/uv toolchain is not required. Native dependency
 builds still need the platform's compiler, SDK and libraries. Windows ARM64 uses
 the shared Visual Studio/Clang/Rust/static OpenSSL preparation provider, which
-can require Administrator permissions for missing system components. macOS
-requires its native developer tools. This is not a hermetic host SDK.
+can require Administrator permissions for missing system components. This is not a hermetic host SDK.
 
 The builder:
 
@@ -140,13 +134,11 @@ separate key or skipped save alone would not protect release caches. Archival re
 prerequisite, and R2 upload credentials are not exposed to desktop preparation.
 
 Strict consumption means no dependency acquisition, not offline signing.
-Timestamp services, Azure signing, Apple notarization and publication remain
+Timestamp services, Azure signing and publication remain
 online operations. Validate unsigned packaging with dependency networking denied
 on each target, then verify signed installers and launchers on their native hosts.
 
-macOS packaging retains the caller's login `HOME` for keychain import and signing.
-An explicit keychain path does not make Security.framework work under a scratch
-home. Dependency preparation and product compilation still use the isolated home.
+Dependency preparation and product compilation use the isolated home.
 Hermes state and explicit dependency-cache paths remain build-owned during packaging.
 
 ## Commit-only builds
@@ -203,9 +195,8 @@ It rejects mixed tag, release-phase, channel-publication, and upgrade inputs.
 
 Builder jobs check out the admitted SHA. Their artifacts and completion receipts
 go to `releases/commit/FULL_SHA/`, separate from tag archives and update channels.
-The run summary lists Windows sideload packages and their universal bundle, macOS DMG/ZIP
-files, and the Termux package. Linux release legs remain disabled and are listed
-as not built. Only receipt-listed artifacts that exist in storage get download
+The run summary lists Windows sideload packages and their universal bundle.
+Only receipt-listed artifacts that exist in storage get download
 links. Missing receipts show the failed or incomplete leg.
 
 Each commit build also writes a downloads page to
@@ -269,8 +260,7 @@ update. Apply downloads the descriptor before teardown, then opens the local
 The app registers a detached relaunch waiter before handoff.
 
 The build stamp declares `updateMechanism`: `app-installer` for sideload bundles,
-`microsoft-store` for Store builds, `electron-updater` for macOS packages, and
-`self` for source-built apps. Settings shows Microsoft Store for a Store build.
+`microsoft-store` for Store builds, and `self` for source-built apps. Settings shows Microsoft Store for a Store build.
 The runtime does not infer Store ownership from Electron flags or carry a
 second Store boolean. Windows Light declares `external` because it has no
 bundled Python checker. Its OS-registered App Installer source still owns
@@ -295,39 +285,6 @@ overflowing cuts. Store versions use `year.hour-of-year.second-of-hour.0` in UTC
 with the fourth component reserved for Microsoft. App semver and package
 version are different facts. `scripts/msix-shared.mjs` owns these derivations.
 
-## macOS signing and updates
-
-`CSC_LINK` and `CSC_KEY_PASSWORD` supply the Developer ID identity.
-The notarization hook accepts `APPLE_API_KEY`, `APPLE_API_KEY_ID`, and
-`APPLE_API_ISSUER`, or a keychain profile. CI materializes the API key from
-`APPLE_API_KEY_P8`.
-
-The app and nested Mach-O binaries, including Chromium, must be signed before
-notarization. The existing after-sign hook owns submission and stapling.
-Publication checks signatures, the stapled ticket, and Gatekeeper assessment.
-Unsigned local builds do not satisfy these gates.
-
-Both DMG and ZIP artifacts are required by the release pipeline. The ZIP is
-the update artifact, not an optional duplicate of the download DMG.
-See [macOS bundle updates](../../docs/macos-bundle-updates.md) for feed validation
-and native-event ordering.
-
-### DMG detach diagnostics
-
-The builder wrapper reports `[dmg-detach]` snapshots when dmgbuild cannot detach
-its staging image. It runs `lsof` before the supplier retries or performs forced
-cleanup. The snapshot identifies the mounted filesystem, backing image and
-devices, then lists process names, PIDs, parent PIDs, users, descriptors and paths.
-
-The queries use noninteractive `sudo` when available. Permission failures and
-query timeouts are reported explicitly. Empty output does not prove that the
-image has no holder. The shim does not stop processes or change detach results,
-retry settings, signing or notarization. Explicit `CUSTOM_DMGBUILD_PATH`
-overrides outside the prepared path are not an escape hatch for strict builds.
-Prepared packaging supplies the admitted dmgbuild path to the diagnostics shim.
-Changes to its preparation provider need native DMG/detach and
-signing/notarization acceptance; a successful download is not native execution proof.
-
 ## Development, assets, and verification
 
 Prepare and activate the [PM developer environment](../../website/docs/reference/package-management.md#developer-workflow)
@@ -342,7 +299,7 @@ npm run dev --workspace apps/desktop
 ```
 
 For an ordinary package of that desktop build, use the workspace's
-`dist:win`, `dist:mac`, `dist:linux`, or `pack` command. Those commands do not
+`dist:win`, `dist:win:nsis`, or `pack` command. Those commands do not
 replace the complete tagged build described above.
 
 Icons are generated from `assets/nous-girl-*.svg` and `assets/backgrounds/`.

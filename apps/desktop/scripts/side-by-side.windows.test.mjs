@@ -48,7 +48,7 @@ async function nativeProof() {
     'apps/desktop/product-identity.cjs', 'apps/desktop/electron-builder.config.cjs',
     'apps/desktop/package.json', 'apps/desktop/update-feed.cjs',
     'apps/desktop/assets/msix-manifest.xml',
-    ...['before-build', 'gen-msix-manifest', 'mac-sign', 'payload-digests', 'write-build-stamp', 'utils']
+    ...['before-build', 'gen-msix-manifest', 'payload-digests', 'write-build-stamp', 'utils']
       .map(name => `apps/desktop/scripts/${name}.mjs`),
     'scripts/msix-shared.mjs', 'scripts/release-content-types.json', 'scripts/build/python.mjs',
     'scripts/bundles/desktop_prepare.py', 'hermes_cli/release_channels.py', 'hermes_cli/__init__.py',

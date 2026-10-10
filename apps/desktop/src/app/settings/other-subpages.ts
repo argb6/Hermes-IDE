@@ -8,8 +8,7 @@ export const OTHER_SUBPAGES: Record<string, { id: string; labelKey: string }[]> 
     { id: 'managed-updates', labelKey: 'gatewayManagedUpdates' }
   ],
   keybinds: [
-    { id: 'shortcuts', labelKey: 'keyboardShortcuts' },
-    { id: 'screen-capture', labelKey: 'screenCapture' }
+    { id: 'shortcuts', labelKey: 'keyboardShortcuts' }
   ],
   notifications: [
     { id: 'alerts', labelKey: 'notificationAlerts' },

@@ -1,20 +1,13 @@
 # Hermes Desktop ☤
 
 <p align="center">
-  <a href="https://github.com/NousResearch/hermes-agent/releases"><img src="https://img.shields.io/badge/Download-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-FFD700?style=for-the-badge" alt="Download"></a>
+  <a href="https://github.com/NousResearch/hermes-agent/releases"><img src="https://img.shields.io/badge/Download-Windows-FFD700?style=for-the-badge" alt="Download"></a>
   <a href="https://hermes-agent.nousresearch.com/docs/"><img src="https://img.shields.io/badge/Docs-hermes--agent.nousresearch.com-FFD700?style=for-the-badge" alt="Documentation"></a>
   <a href="https://discord.gg/NousResearch"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://github.com/NousResearch/hermes-agent/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License: MIT"></a>
 </p>
 
-**The native desktop app for [Hermes Agent](../../README.md) — the self-improving AI agent from [Nous Research](https://nousresearch.com).** Same agent, same skills, same memory as the CLI and gateway, in a polished native window — chat with streaming tool output, side-by-side previews, a file browser, voice, and settings, no terminal required. Available for **macOS, Windows, and Linux**.
-
-> **Intel Macs:** the `Hermes-Setup.dmg` bootstrap installer is built for
-> Apple Silicon (arm64) only, so on an Intel Mac it reports "not supported on
-> this Mac". The desktop release pipeline also builds a native `darwin-x64`
-> bundle (signed, notarized, with its own update feed); use that build, or
-> install the [CLI](../../README.md) and run `hermes desktop`. See
-> [Platform Support](../../website/docs/getting-started/platform-support.md#build-targets-and-support-priority).
+**The native desktop app for [Hermes Agent](../../README.md) — the self-improving AI agent from [Nous Research](https://nousresearch.com).** Same agent, same skills, same memory as the CLI and gateway, in a polished native window — chat with streaming tool output, side-by-side previews, a file browser, voice, and settings, no terminal required. Available for **Windows**.
 
 <table>
 <tr><td><b>Chat with the full agent</b></td><td>Streaming responses, live tool activity, structured tool summaries, and the same conversation history as every other Hermes surface.</td></tr>
@@ -48,35 +41,19 @@ Prebuilt installers are built and distributed via [the Hermes Desktop website.](
 ## Updating
 
 Update through the owner of the installed artifact: Windows App Installer for
-sideload MSIX, Microsoft Store for Store packages, and `electron-updater` for
-macOS bundles. Source-built apps use the checkout update handoff.
+sideload MSIX and Microsoft Store for Store packages. Source-built apps use the
+checkout update handoff.
 
 `hermes update` updates managed source checkouts; it does not rewrite a bundled
 payload. See [BUILDING.md](BUILDING.md) for package and release contracts.
 
 ---
 
-## Screenshot shortcut (macOS)
-
-Enable **Settings → Keyboard Shortcuts → Screenshot shortcut**, then press the
-left and right Command keys together in any app. Hermes captures that app's
-frontmost window and attaches the image to the last-active Hermes composer,
-including split-pane chats. It does not send the draft or capture the whole
-screen. Release both keys before taking another screenshot.
-
-The shortcut is off by default and saved only on this Mac. macOS requires
-**Input Monitoring** and **Screen & System Audio Recording** permission; the
-settings row links to the relevant system pane and offers Retry. If macOS asks
-to restart the app after granting access, do so before retrying. Review the
-attachment before sending, especially when the captured window is sensitive.
-
 ## Requirements
 
 Bundled packages provide Python 3.14 and their supported dependencies.
 Source/bootstrap builds have a separate preparation path. Platform-native
 requirements, including system Git on POSIX, are described in [BUILDING.md](BUILDING.md).
-macOS source builds also require Xcode Command Line Tools to compile the native
-shortcut helper. Prebuilt installers include it; no compiler is needed at runtime.
 
 ---
 
@@ -103,17 +80,15 @@ npm run dev:fake-boot   # exercise the startup overlay with deterministic delays
 ### Building installers
 
 ```bash
-npm run dist:mac      # DMG + zip
 npm run dist:win      # MSIX
 npm run dist:win:nsis # assisted NSIS, x64, not published (see assets/nsis-packaging.md)
-npm run dist:linux    # AppImage + deb + rpm
 npm run pack          # unpacked app under release/ (no installer)
 ```
 
 These are ordinary packaging commands, not complete tagged payload builds.
-Use [BUILDING.md](BUILDING.md) for the native bundled builder, Azure/Apple
-signing, R2 artifact publication, and release gates. The current release matrix
-publishes Windows and macOS packages; Linux desktop legs are disabled.
+Use [BUILDING.md](BUILDING.md) for the native bundled builder, Azure signing, R2
+artifact publication, and release gates. The current release matrix publishes
+Windows packages.
 
 ### How it works
 
@@ -231,17 +206,6 @@ release-path changes.
 ### Troubleshooting
 
 Boot logs land in `HERMES_HOME/logs/desktop.log` (includes backend output and recent Python tracebacks) — check it first if the app reports a boot failure.
-
-**macOS / Linux:**
-
-```bash
-# Force a clean first-launch setup
-rm "$HOME/.hermes/hermes-agent/.hermes-bootstrap-complete"
-# Rebuild a broken Python venv
-rm -rf "$HOME/.hermes/hermes-agent/venv"
-# Reset a stuck macOS microphone prompt (macOS only)
-tccutil reset Microphone com.nousresearch.hermes
-```
 
 **Windows (PowerShell):**
 

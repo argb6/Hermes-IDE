@@ -129,13 +129,10 @@ test('channel packaging reuses admitted identity and rejects unsupported or unsa
     fs.rmSync(appData, { recursive: true, force: true })
   }
 
-  assert.deepEqual(a.config.mac?.publish, [
-    {
-      provider: 'generic',
-      url: `${first.publicBase}/releases/channel-builds/${first.buildId}/darwin/`,
-      channel: 'latest'
-    }
-  ])
+  // Channel builds are archived and staged for the appinstaller; they must
+  // never publish to the electron-updater feed (the top-level publish stays
+  // null for channel requests — see electron-builder.config.cjs).
+  assert.equal(a.config.publish, null)
   process.env.HERMES_DESKTOP_VARIANT = 'light'
   delete require.cache[require.resolve('../product-identity.cjs')]
   assert.throws((): void => {
@@ -378,8 +375,6 @@ test('actual MSIX manifest writer consumes the channel quad across rollover inst
       'apps/desktop/update-feed.cjs',
       'apps/desktop/assets/msix-manifest.xml',
       'apps/desktop/scripts/before-build.mjs',
-      'apps/desktop/scripts/mac-icon.cjs',
-      'apps/desktop/scripts/mac-sign.mjs',
       'apps/desktop/scripts/payload-digests.mjs',
       'apps/desktop/scripts/utils.mjs',
       'scripts/msix-shared.mjs',
