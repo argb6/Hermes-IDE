@@ -326,3 +326,7 @@ native/fts5_cjk/*.so
 /pm/.lock.json.lock
 
 apps/desktop/.dist-build*
+
+# Build-time fetched runtime bundles (shipped in the installer, never committed)
+apps/desktop/resources/js-debug/
+apps/desktop/resources/js-debug-dap-*.tar.gz

@@ -77,8 +77,10 @@ module.exports = {
   appId,
   productName: displayName,
   executableName: displayName,
-  // NSIS / PE version resources (CompanyName from package.json author, LegalCopyright here).
-  copyright: 'Copyright © 2026',
+  // No copyright / company / author anywhere in the PE or the installer — the
+  // package carries no producer identity (user requirement). An explicit empty
+  // string beats electron-builder's generated default.
+  copyright: '',
   protocols: [
     {
       name: `${displayName} Protocol`,
@@ -88,9 +90,9 @@ module.exports = {
   // A store build is archived, never served to a feed — prefix its artifact
   // so it can't collide with the out-of-store MSIX of the same tag/arch, and
   // the release pipeline can keep the two apart.
-  // Local Windows NSIS: marketing name "Hermes-IDE windows ×86" (amd64 / x64).
+  // Local Windows NSIS: fixed marketing name per product decision.
   artifactName: winNsis
-    ? 'Hermes-IDE windows ×86-${version}.${ext}'
+    ? 'Hermes-IDE-win-x64-1.0.0beta.${ext}'
     : `${store ? 'Store-' : ''}${artifactNamePascal}-\${version}-\${os}-\${arch}.\${ext}`,
   icon: 'assets/icon',
   // The electron-updater feed. CI builds set CLOUDFLARE_R2_PUBLIC_URL (the R2
@@ -272,7 +274,6 @@ module.exports = {
   },
   win: {
     executableName: windowsExecutableName,
-    legalTrademarks: displayName,
     target: winNsis ? ['nsis'] : ['msix'],
     // The updaters' relaunch waiter is PowerShell run outside the package. The
     // sealed payload's snapshot omits scripts/, so it ships as a resource

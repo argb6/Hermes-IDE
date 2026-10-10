@@ -2,9 +2,8 @@
   "name": "hermes",
   "productName": "Hermes-IDE",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0-beta",
   "description": "Hermes-IDE desktop shell (private fork of Hermes Agent).",
-  "author": "Hermes-IDE",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/argb6/Hermes-IDE.git"

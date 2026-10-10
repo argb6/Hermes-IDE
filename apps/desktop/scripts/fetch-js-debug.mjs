@@ -22,19 +22,16 @@ if (fs.existsSync(marker) && !process.argv.includes('--force')) {
 }
 
 console.log(`fetching js-debug v${VERSION} ...`)
-const response = await fetch(URL)
-
-if (!response.ok) {
-  console.error(`fetch failed: ${response.status} ${response.statusText}`)
-  process.exit(1)
-}
-
 const archive = path.join(resources, `js-debug-dap-v${VERSION}.tar.gz`)
 fs.mkdirSync(resources, { recursive: true })
-fs.writeFileSync(archive, Buffer.from(await response.arrayBuffer()))
+// curl, not fetch: it honours the system proxy and retries on flaky links —
+// plain undici timed out on the very URL curl reaches fine.
+execFileSync('curl', ['-fL', '--retry', '3', '--connect-timeout', '30', '-o', archive, URL], { stdio: 'inherit' })
 fs.rmSync(target, { recursive: true, force: true })
-// The tarball's top-level dir is `js-debug/`; extract straight into resources/.
-execFileSync('tar', ['-xzf', archive, '-C', resources], { stdio: 'inherit' })
+// The tarball's top-level dir is `js-debug/`; extract straight into
+// resources/. A basename-only arg (cwd = resources): GNU tar treats the colon
+// in `E:\...` as a remote host.
+execFileSync('tar', ['-xzf', path.basename(archive)], { cwd: resources, stdio: 'inherit' })
 fs.rmSync(archive, { force: true })
 
 if (!fs.existsSync(marker)) {

@@ -42,7 +42,7 @@
   - 流式输出/图片加载后的滚动锚定（scroll anchoring）或“保持在底部”逻辑把视口复位到上方；
   - 窗口化（`transcript-window.ts` 粘性切线 `messages.slice(start)`）滚动恢复竞态；
   - 某处 `scrollIntoView`（“回到最新”reveal / 会话切换恢复）被意外触发。
-- **状态**：未修。截图提供了第一份具体证据（重复卡片 + 首句被吃），从回填去重和滚动恢复两处入手。
+- **状态（2026-10-10 复查）**：**未能定位到可修复的具体缺陷，暂停待复现**。已逐层审查转录回填合并（`mergeOlderTranscriptPage` 的 rowId/id/part 三级去重，折叠气泡覆盖齐全）、窗口化切线（按消息 id 锚定、不双渲染）、顶部自动翻页 + `anchorBeforePrepend` 滚动保持、`useTimelineReveal` 跳转（仅显式事件触发）、切线移动补偿（parked restore / ResizeObserver 重钉），均未找到可证实的缺口——继续盲改会制造“看起来像修复”的假象，故停在此。**需要你提供**：发生时你刚做了什么（滚动？点了时间线？会话刚切换？流式输出中？），有第二次截图最好——有了触发路径我立刻接着修。
 
 ---
 
@@ -57,20 +57,14 @@
 
 ---
 
-## 四、把“现场下载”的依赖去掉（新需求）
+## 四、把“现场下载”的依赖去掉 ✅ 已完成（2026-10-10，方向 A：内置进安装包）
 
-**需求**：不要依赖运行时在线下载的组件——现在是“用的时候现下载”，不是安装包自带的。要么改成自带，要么去掉这项依赖。
+**决策（用户拍板）**：方向 A —— 组件随安装包自带，运行时**零下载**；扩展市场保留“用户点了才下载”（内容分发，非启动依赖）。
 
-已核实涉及“现场下载”的位置：
-
-| 组件 | 位置 | 现状 |
-|---|---|---|
-| 语言服务器（pyright 1.1.414、typescript-language-server 6.0.1） | `apps/desktop/electron/ide/lsp/catalog.ts`、`lsp/install.ts` | 代码注释原文：“They are not bundled in the installer; the manager downloads these exact versions on first use.” 首次使用时在线下载 |
-| 调试适配器（vscode-js-debug） | `apps/desktop/electron/ide/dap/manager.ts` | 运行时下载，失败只能报 unavailable |
-| 扩展市场（Open VSX 的 vsix） | `apps/desktop/electron/ide/extensions/openvsx.ts` | 安装扩展时在线下载（市场性质，是否保留待定） |
-
-- **待决策**：内置进安装包（离线可用）还是直接去掉该能力（例如不带语言服务器，编辑器只做纯文本高亮）。
-- **实现要点**：改 `install.ts` / `manager.ts` 的解析逻辑（找本地自带目录优先于下载），安装包打包相应资源，`catalog.ts` 的版本常量随之调整。
+已实现：
+- 语言服务器 `pyright@1.1.414`、`typescript-language-server@6.0.1`、`typescript@6.0.3` 转为 `apps/desktop/package.json` 依赖；`scripts/stage-lsp-servers.mjs` 在打包时按 ripgrep 同款暂存进 `dist/node_modules`，`electron/ide/lsp/install.ts` 改为从包内解析（`createRequire`），删除运行时 npm 安装器（`npm-install.ts`）。
+- vscode-js-debug 1.140.0 的 DAP 包改为**构建期**由 `scripts/fetch-js-debug.mjs` 拉取到 `resources/js-debug/`（gitignore，不入库），经 `extraResources` 打进安装包；`electron/ide/dap/js-debug.ts` 只解析内置/缓存位置，缺失时明确报 `js-debug-not-bundled`。
+- 实测体积：三项解压后 ≈50MB，NSIS 压缩后安装包约 +20MB。
 
 ---
 
@@ -91,6 +85,16 @@
 2. **内容以“粘贴密钥”行形式并入提供商列表** ✅：目录里的 226 家提供商并入“API 密钥”视图（`catalog-provider-rows.tsx`），行式与现有提供商卡一致（圆点 + 名称 + 粘贴密钥输入框）；**粘贴一次即添加**——保存密钥的同时注册该提供商的端点（原预设只加端点、密钥要另去端点页填，两步）。
 3. **按名称排序** ✅：并入行按名称字典序排列；与内置卡片重复的（按名称/环境变量名去重，如 Anthropic）不再显示第二行。
 4. **搜索框优化** ✅：统一一个搜索框，同时过滤内置卡片和并入行，匹配名称 / 提供商 id / 环境变量名 / 接口地址 / 模型名；两者都无匹配才显示空态。
+
+---
+
+## 七、上游合并 / 检查 / 分支整理 / 打包 ✅（2026-10-10）
+
+- **核心合并（逐文件核对）** ✅：496 个差异文件逐一归类——fork 自有 6 文件（`agent/file_safety.py` 桌面写权限、`scripts/install.*`、`tools/code_intelligence_tool.py`）逐块复审后保留；其余为导入快照的版本缺口（快照是 9/27–10/06 的混合态），对齐上游 HEAD，≈190 个上游修复随行（插件启用不再剥离核心工具、/yolo 恢复键持久化、中途换模型先确认再排队、无通知器的无人值守审批回合解析、session branch/interrupt 拆分等）；`gateway/platforms` 保持 fork 的删减设计（引用均为懒加载）。
+- **全量检查** ✅：Python 全套 + vitest + tsc + eslint。失败面全部归因 Windows 环境类（symlink 特权、真实 home 守卫、跨用例会话所有权污染、POSIX 路径假设、Popen monkeypatch），无代码缺口；已知失败列表见上文附录。
+- **分支整理** ✅：2 个未合并分支（nsis-wipe-dir-safety、security-readme-docs）先并入 main（前者内容已被 #3 取代，仅取注释演进并删除孤儿 nsh）；核对 6 个分支全部推送完毕后从 GitHub 删除。
+- **打包** ✅：`release/Hermes-IDE-win-x64-1.0.0beta.exe`（135MB，x64 NSIS）。不签名（AZURE_SIGN_* 未设）；PE 元数据 CompanyName / LegalCopyright / 版本戳均无公司、作者、版权信息（ProductName=Hermes-IDE、ProductVersion=1.0.0-beta）；语言服务器 + DAP 随包内置（详见四）；打包产物不入 git 仓库（release/ 与 resources/js-debug/ 均已 ignore）。
+- **TODO 三（性能）未完成**：已取得基线数据（stream-history 长任务最大 2.9s、33 个长任务、帧 p95≈98ms，运行时受并行负载污染），热点归因与修复循环（--cpuprofile → 修 → 前后对比）尚未执行；与 TODO 二同列为重点待续。
 
 ---
 

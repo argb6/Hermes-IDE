@@ -87,9 +87,9 @@ async function stampExeIdentity(
     icon,
     'version-string': {
       ProductName: 'Hermes-IDE',
-      FileDescription: 'Hermes-IDE',
-      CompanyName: 'Hermes-IDE',
-      LegalCopyright: 'Copyright (c) 2026'
+      FileDescription: 'Hermes-IDE'
+      // No CompanyName / LegalCopyright: the package carries no company or
+      // author identity by design.
     }
   }
 
