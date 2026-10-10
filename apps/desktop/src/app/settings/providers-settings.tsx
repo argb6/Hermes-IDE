@@ -29,12 +29,12 @@ import { $desktopOnboarding, startManualLocalEndpoint, startManualProviderOAuth 
 import { $settingsRequestProfile } from '@/store/settings-scope'
 import type { EnvVarInfo, OAuthProvider } from '@/types/hermes'
 
+import { CatalogProviderRows, visibleCatalogEntries } from './catalog-provider-rows'
 import { isKeyVar, ProviderKeyRows } from './credential-key-ui'
 import { CustomEndpointsSettings } from './custom-endpoints-settings'
 import { SettingsCategoryHeading, useEnvCredentials } from './env-credentials'
 import { providerGroup, providerMeta, providerPriority } from './helpers'
 import { LocalModelsSettings } from './local-models-settings'
-import { OpencodeProviderCatalog } from './opencode-provider-catalog'
 import { SettingsContent, SettingsSkeleton } from './primitives'
 import { SettingsProfileScope } from './profile-scope'
 import { useDeepLinkHighlight } from './use-deep-link-highlight'
@@ -552,6 +552,11 @@ export function ProvidersSettings({
         })
       : keyGroups
 
+    // Catalog additions: deduped against the built-in cards, name-sorted, and
+    // filtered by the SAME search box (name / id / env key / base URL / model).
+    const hiddenCatalogIds = new Set(keyGroups.flatMap(group => [group.name.toLowerCase(), group.primary[0]]))
+    const catalogEntries = visibleCatalogEntries(keyQuery, hiddenCatalogIds)
+
     return (
       <SettingsContent>
         <SettingsProfileScope className="mb-5" />
@@ -565,8 +570,7 @@ export function ProvidersSettings({
               placeholder={t.settings.providers.searchKeys}
               value={keyQuery}
             />
-            <OpencodeProviderCatalog onAdded={() => onViewChange('custom-endpoints')} profile={scopeProfile} />
-            {visibleGroups.length > 0 ? (
+            {visibleGroups.length > 0 && (
               <div className="grid gap-2">
                 {visibleGroups.map(group => (
                   <div className="scroll-mt-6 rounded-[6px]" id={providerKeyElementId(group.name)} key={group.name}>
@@ -580,7 +584,9 @@ export function ProvidersSettings({
                   </div>
                 ))}
               </div>
-            ) : (
+            )}
+            <CatalogProviderRows entries={catalogEntries} profile={scopeProfile} vars={vars} />
+            {visibleGroups.length === 0 && catalogEntries.length === 0 && (
               <div className="grid min-h-24 place-items-center px-4 py-6 text-center text-[length:var(--conversation-caption-font-size)] text-muted-foreground">
                 {t.settings.providers.noKeysMatch}
               </div>

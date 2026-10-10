@@ -12,6 +12,7 @@ const disconnectOAuthProvider = vi.fn()
 const getEnvVars = vi.fn()
 const revealEnvVar = vi.fn()
 const setEnvVar = vi.fn()
+const saveCustomEndpoint = vi.fn()
 const startManualProviderOAuth = vi.fn()
 const startManualLocalEndpoint = vi.fn()
 const onboarding = atom({ manual: false })
@@ -31,7 +32,8 @@ vi.mock('@/hermes', () => ({
   getEnvVars: (...args: unknown[]) => getEnvVars(...args),
   listOAuthProviders: (...args: unknown[]) => listOAuthProviders(...args),
   revealEnvVar: (key: string, profile?: string) => revealEnvVar(key, profile),
-  setEnvVar: (key: string, value: string, profile?: string) => setEnvVar(key, value, profile)
+  setEnvVar: (key: string, value: string, profile?: string) => setEnvVar(key, value, profile),
+  saveCustomEndpoint: (endpoint: unknown, profile?: string) => saveCustomEndpoint(endpoint, profile)
 }))
 
 vi.mock('@/store/onboarding', () => ({
@@ -86,6 +88,7 @@ beforeEach(() => {
   disconnectOAuthProvider.mockResolvedValue({ ok: true, provider: 'nous' })
   revealEnvVar.mockResolvedValue({ value: 'old-secret' })
   setEnvVar.mockResolvedValue({ ok: true })
+  saveCustomEndpoint.mockResolvedValue({ ok: true })
   listOAuthProviders.mockResolvedValue({
     providers: [provider('nous', true), provider('minimax-oauth', false)]
   })
@@ -274,7 +277,11 @@ describe('ProvidersSettings', () => {
 
     expect(await screen.findByText('Qwen Cloud')).toBeTruthy()
     expect(screen.getByText('Alibaba Cloud DashScope (China)')).toBeTruthy()
-    const inputs = screen.getAllByPlaceholderText(/Paste .* key/)
+
+    const inputs = screen
+      .getAllByPlaceholderText(/Paste .* key/)
+      .filter(el => !el.closest('[data-catalog-row]'))
+
     expect(inputs).toHaveLength(2)
 
     fireEvent.focus(inputs[0])
@@ -331,7 +338,11 @@ describe('ProvidersSettings', () => {
     // Exactly one primary "Paste … key" input per card; the CN card's must edit
     // ALIBABA_CODING_PLAN_CN_API_KEY, never the shared DASHSCOPE_API_KEY.
     const inputs = container.querySelectorAll('input[type="password"]')
-    const pasteInputs = await screen.findAllByPlaceholderText(/Paste .* key/)
+
+    const pasteInputs = (await screen.findAllByPlaceholderText(/Paste .* key/)).filter(
+      el => !el.closest('[data-catalog-row]')
+    )
+
     expect(pasteInputs).toHaveLength(2) // Qwen Cloud card + the CN Coding Plan card
 
     const cnCard = screen
@@ -462,5 +473,68 @@ describe('ProvidersSettings', () => {
     fireEvent.click(row)
 
     await waitFor(() => expect(startManualLocalEndpoint).toHaveBeenCalledWith(null))
+  })
+})
+
+describe('catalog provider rows', () => {
+  // A first-class card keeps the keys view's group list non-empty (the catalog
+  // block rides the same section) and owns its name — the catalog must not
+  // render a second row for it.
+  const baseVars = () => ({
+    ANTHROPIC_API_KEY: keyVar({ provider: 'anthropic', provider_label: 'Anthropic' })
+  })
+
+  it('one pasted key saves the key AND registers the endpoint', async () => {
+    getEnvVars.mockResolvedValue(baseVars())
+    listOAuthProviders.mockResolvedValue({ providers: [] })
+
+    render(<ProvidersSettings onClose={vi.fn()} onViewChange={vi.fn()} view="keys" />)
+
+    const row = await screen.findByText('302.AI')
+    const card = row.closest('[data-catalog-row]') as HTMLElement
+    const input = card.querySelector('input')!
+
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'sk-302-test' } })
+    fireEvent.click(within(card).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      const [key, value] = setEnvVar.mock.calls.at(-1) ?? []
+      expect(key).toBe('302AI_API_KEY')
+      expect(value).toBe('sk-302-test')
+      expect(saveCustomEndpoint.mock.calls.at(-1)?.[0]).toMatchObject({
+        base_url: 'https://api.302.ai/v1',
+        name: '302.AI'
+      })
+    })
+  })
+
+  it('the search box filters the catalog rows alongside the provider cards', async () => {
+    getEnvVars.mockResolvedValue(baseVars())
+    listOAuthProviders.mockResolvedValue({ providers: [] })
+
+    render(<ProvidersSettings onClose={vi.fn()} onViewChange={vi.fn()} view="keys" />)
+
+    expect(await screen.findByText('302.AI')).toBeTruthy()
+
+    fireEvent.change(screen.getByPlaceholderText('Search providers…'), { target: { value: '302.ai' } })
+
+    await waitFor(() => {
+      expect(screen.queryByText('Abacus')).toBeNull()
+      expect(screen.getByText('302.AI')).toBeTruthy()
+    })
+  })
+
+  it('does not duplicate a provider that already has a first-class card', async () => {
+    getEnvVars.mockResolvedValue(baseVars())
+    listOAuthProviders.mockResolvedValue({ providers: [] })
+
+    const { container } = render(<ProvidersSettings onClose={vi.fn()} onViewChange={vi.fn()} view="keys" />)
+
+    expect(await screen.findByText('302.AI')).toBeTruthy()
+    // 'Anthropic' is both a built-in card (from the fixture) and a catalog
+    // entry — exactly one row must render, and it is the card.
+    expect(screen.queryAllByText('Anthropic')).toHaveLength(1)
+    expect(container.querySelectorAll('[data-catalog-row]').length).toBeGreaterThan(100)
   })
 })
