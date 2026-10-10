@@ -333,3 +333,6 @@ apps/desktop/resources/js-debug-dap-*.tar.gz
 
 # Perf/build staging dirs (never committed)
 apps/desktop/.dist-*/
+
+# Local-only work backlog (never pushed)
+TODO.md
